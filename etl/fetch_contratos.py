@@ -226,11 +226,18 @@ def process_period(period: str, keep: bool) -> int:
     return n
 
 
+def month_range(start: str, end: str) -> list[str]:
+    y, m = int(start[:4]), int(start[4:6])
+    out = []
+    while f"{y}{m:02d}" <= end:
+        out.append(f"{y}{m:02d}")
+        y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+    return out
+
+
 def default_periods() -> list[str]:
     today = dt.date.today()
-    years = [str(y) for y in range(2021, today.year)]
-    months = [f"{today.year}{m:02d}" for m in range(1, today.month + 1)]
-    return years + months
+    return month_range("202101", f"{today.year}{today.month:02d}")
 
 
 def build() -> None:
@@ -331,7 +338,12 @@ def main() -> None:
     ap.add_argument("--keep-zips", action="store_true")
     ap.add_argument("--refresh-last", type=int, default=2, help="re-procesa los N últimos periodos")
     ap.add_argument("--build-only", action="store_true")
+    ap.add_argument("--no-build", action="store_true", help="solo descarga y extrae (para trabajos en paralelo)")
+    ap.add_argument("--list-months", nargs=2, metavar=("DESDE", "HASTA"), help="imprime los meses como JSON y sale")
     args = ap.parse_args()
+    if args.list_months:
+        print(json.dumps(month_range(*args.list_months)))
+        return
     CACHE.mkdir(parents=True, exist_ok=True)
     if not args.build_only:
         periods = args.periods or default_periods()
@@ -339,7 +351,8 @@ def main() -> None:
             (CACHE / f"{p}.jsonl").unlink(missing_ok=True)
         for p in periods:
             process_period(p, args.keep_zips)
-    build()
+    if not args.no_build:
+        build()
 
 
 if __name__ == "__main__":

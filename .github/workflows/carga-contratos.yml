@@ -1,0 +1,86 @@
+name: Carga histórica de contratos
+
+# Descarga en paralelo (un trabajo por mes) el histórico de la Plataforma de
+# Contratación y lo une en site/data/contratos.json. Se lanza a mano.
+on:
+  workflow_dispatch:
+    inputs:
+      desde:
+        description: "Primer mes (YYYYMM)"
+        default: "202101"
+      hasta:
+        description: "Último mes (YYYYMM)"
+        default: "202611"
+      paralelo:
+        description: "Trabajos simultáneos"
+        default: "8"
+
+permissions:
+  contents: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      months: ${{ steps.m.outputs.months }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: m
+        run: echo "months=$(python3 etl/fetch_contratos.py --list-months ${{ inputs.desde }} ${{ inputs.hasta }})" >> "$GITHUB_OUTPUT"
+
+  mes:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ fromJSON(inputs.paralelo) }}
+      matrix:
+        month: ${{ fromJSON(needs.plan.outputs.months) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python3 etl/fetch_contratos.py --periods ${{ matrix.month }} --refresh-last 0 --no-build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: contratos-${{ matrix.month }}
+          path: etl/.cache/contratos/${{ matrix.month }}.jsonl
+          retention-days: 7
+
+  unir:
+    needs: mes
+    if: always() && needs.mes.result != 'cancelled'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Restaurar caché de contratos
+        uses: actions/cache/restore@v4
+        with:
+          path: etl/.cache/contratos
+          key: placsp-${{ github.run_id }}
+          restore-keys: placsp-
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: contratos-*
+          path: etl/.cache/contratos
+          merge-multiple: true
+      - run: ls etl/.cache/contratos | wc -l && python3 etl/fetch_contratos.py --build-only
+      - name: Guardar caché de contratos
+        uses: actions/cache/save@v4
+        with:
+          path: etl/.cache/contratos
+          key: placsp-${{ github.run_id }}
+      - name: Guardar cambios
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin main
+          git add site/data/contratos.json
+          git diff --cached --quiet && echo "Sin cambios" && exit 0
+          git commit -m "Datos: carga histórica de contratos PRTR"
+          git push
