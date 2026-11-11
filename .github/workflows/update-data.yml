@@ -36,4 +36,5 @@ jobs:
           git add site/data
           git diff --cached --quiet && echo "Sin cambios" && exit 0
           git commit -m "Datos: actualización BDNS $(date -u +%F)"
+          git pull --rebase origin main
           git push
