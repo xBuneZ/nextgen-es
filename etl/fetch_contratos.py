@@ -273,6 +273,9 @@ def build() -> None:
     # con un solo licitador o negociados sin publicidad.
     nocomp = defaultdict(set)
     for r in recs:
+        ganadores = {(l.get("nif") or l["adj"]).upper() for l in r["lotes"] if l.get("adj")}
+        if len(ganadores) > 2:  # acuerdos marco con muchos adjudicatarios: no es "un ganador recurrente"
+            continue
         for l in r["lotes"]:
             if l.get("adj") and (l.get("ofertas") == 1 or r["proc"] == "Negociado sin publicidad"):
                 nocomp[(r["organo"], (l.get("nif") or l["adj"]).upper())].add(r["id"])
