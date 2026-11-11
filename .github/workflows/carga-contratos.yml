@@ -1,7 +1,7 @@
 name: Carga histórica de contratos
 
 # Descarga en paralelo (un trabajo por mes) el histórico de la Plataforma de
-# Contratación y lo une en site/data/contratos.json. Se lanza a mano.
+# Contratación y lo une en site/data/contratos/. Se lanza a mano.
 on:
   workflow_dispatch:
     inputs:
@@ -79,7 +79,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add site/data/contratos.json
+          git add -A site/data
           git diff --cached --quiet && echo "Sin cambios" && exit 0
           git commit -m "Datos: carga histórica de contratos PRTR"
           git pull --rebase origin main

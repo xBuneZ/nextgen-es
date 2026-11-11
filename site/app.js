@@ -31,6 +31,7 @@ async function load() {
   const [r, c, b] = await Promise.all(["resumen", "convocatorias", "beneficiarios"].map((f) => fetch(`data/${f}.json`).then((x) => x.json())));
   DB.resumen = r; DB.convs = c; DB.benef = b;
   for (const x of c) {
+    x.ficha_url = `https://www.infosubvenciones.es/bdnstrans/GE/es/convocatorias/${x.id}`;
     DB.convById.set(String(x.id), x);
     x._s = norm([x.titulo, x.nivel2, x.nivel3, x.id, ...x.top.map((b) => b.nombre + " " + (b.nif || ""))].join(" "));
   }
@@ -269,9 +270,17 @@ function issueUrl(c) {
   return `https://github.com/${REPO}/issues/new?labels=revision&title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
 }
 
-function showProject(id) {
+const CTOP = new Map();
+async function showProject(id) {
   const c = DB.convById.get(String(id));
   if (!c) return;
+  if (c.top_mas) {
+    const k = String(/^\d+$/.test(String(c.id)) ? Number(c.id) % 16 : 0).padStart(2, "0");
+    if (!CTOP.has(k)) CTOP.set(k, fetch(`data/convocatorias/det/${k}.json`).then((r) => r.json()).catch(() => ({})));
+    openModal(`<p class="muted">${t("loading")}</p>`);
+    const full = (await CTOP.get(k))[String(c.id)];
+    if (full) { c.top = full; c.top_mas = false; }
+  }
   const row = (k, v) => (v ? `<dt>${t(k)}</dt><dd>${v}</dd>` : "");
   openModal(`<h3>${esc(c.titulo)}</h3>
     <p class="muted">${esc(c.nivel1)} · ${esc(c.nivel2)}${c.nivel3 ? " · " + esc(c.nivel3) : ""} · BDNS ${esc(c.id)} · ${esc(c.fecha)}</p>
@@ -364,16 +373,54 @@ const CFLAGS = ["licitador_unico", "sin_baja", "ganador_recurrente", "plazo_cort
 const CT = { data: null, loading: null };
 const cstate = { q: "", proc: "", flag: "", ambito: "", page: 0, sort: "importe", dir: -1 };
 
+// Índice ligero (listado, búsqueda y ranking) + textos aparte + detalle en trozos
 function loadContratos() {
   if (!CT.loading) {
-    CT.loading = fetch("data/contratos.json").then((r) => (r.ok ? r.json() : null)).then((d) => {
-      if (d) CT.byId = new Map();
-      if (d) d.contratos.forEach((c, i) => { c._i = i; c.cid = decodeURIComponent(((c.url || "").match(/idEvl=([^&]+)/) || [])[1] || "n" + i); CT.byId.set(c.cid, c); c._s = norm([c.objeto, c.organo, c.exp, c.ruta, ...c.adj.map((a) => a.nombre + " " + a.nif)].join(" ")); });
+    CT.loading = fetch("data/contratos/indice.json").then((r) => (r.ok ? r.json() : null)).then((d) => {
+      if (!d) return null;
+      const D = d.dic, C = d.cols, emp = D.emp.map(([nombre, nif]) => ({ nombre, nif }));
+      CT.byId = new Map();
+      CT.n = d.n_trozos;
+      d.contratos = C.id.map((cid, i) => {
+        const [organo, ambito, ruta] = D.org[C.org[i]];
+        const c = { _i: i, cid, exp: C.exp[i], objeto: "", organo, ambito, ruta, proc: D.proc[C.proc[i]],
+          adj: C.emp[i].map((k) => emp[k]), importe: C.imp[i], fecha: C.fecha[i], ofertas: C.of[i],
+          flags: D.flags.filter((_, b) => C.fl[i] & (1 << b)) };
+        CT.byId.set(cid, c);
+        return c;
+      });
       CT.data = d;
       return d;
     }).catch(() => null);
   }
   return CT.loading;
+}
+
+function loadTextos() {
+  if (!CT.textos) {
+    CT.textos = loadContratos().then((d) => d && fetch("data/contratos/textos.json").then((r) => r.json()).then((tx) => {
+      d.contratos.forEach((c, i) => { c.objeto = c.objeto || tx[i] || ""; c._s = norm([c.objeto, c.organo, c.exp, c.ruta, ...c.adj.map((a) => a.nombre + " " + a.nif)].join(" ")); });
+      return d;
+    })).catch(() => CT.data);
+  }
+  return CT.textos;
+}
+
+function trozoDe(cid) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < cid.length; i++) { h ^= cid.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return String(h % CT.n).padStart(2, "0");
+}
+const TROZOS = new Map();
+function loadDetalle(c) {
+  const k = trozoDe(c.cid);
+  if (!TROZOS.has(k)) TROZOS.set(k, fetch(`data/contratos/det/${k}.json`).then((r) => r.json()).catch(() => ({})));
+  return TROZOS.get(k).then((t) => {
+    const d = t[c.cid];
+    if (d && !c._det) Object.assign(c, d, { _det: true });
+    c.url = c.url || "https://contrataciondelestado.es/wps/poc?uri=deeplink:detalle_licitacion&idEvl=" + encodeURIComponent(c.cid);
+    return c;
+  });
 }
 const cflagTags = (flags) => (flags || []).map((f) => `<span class="tag" data-f="${f}" title="${esc(t("cflagd_" + f))}">${esc(t("cflag_" + f))}</span>`).join("");
 
@@ -440,9 +487,10 @@ function bindContratos() {
   renderContratos();
 }
 
-function showContrato(id) {
+async function showContrato(id) {
   const c = CT.data && (CT.byId.get(decodeURIComponent(id || "")) || CT.data.contratos[Number(id)]);
   if (!c) return;
+  if (!c._det) { openModal(`<p class="muted">${t("loading")}</p>`); await loadDetalle(c); }
   const row = (k, v) => (v ? `<dt>${t(k)}</dt><dd>${v}</dd>` : "");
   openModal(`<h3>${esc(c.objeto)}</h3>
     <p class="muted">${esc(c.organo)}${c.ruta ? " · " + esc(c.ruta) : ""} · ${t("c_exp")} ${esc(c.exp)}</p>
@@ -663,7 +711,7 @@ function route() {
   } else if (view === "beneficiarios") { app.innerHTML = viewBenef(); bindBenef(); }
   else if (view === "contratos") {
     app.innerHTML = `<p class="muted">${t("loading")}</p>`;
-    loadContratos().then(() => { if (app.dataset.view === "contratos") { app.innerHTML = viewContratos(); bindContratos(); } });
+    loadTextos().then(() => { if (app.dataset.view === "contratos") { app.innerHTML = viewContratos(); bindContratos(); } });
   }
   else if (view === "ranking") {
     rstate.tab = parts[1] === "subvenciones" ? "subvenciones" : "contratos";

@@ -27,6 +27,7 @@ import re
 import sys
 import time
 import unicodedata
+import urllib.parse
 import urllib.request
 import zipfile
 from collections import defaultdict
@@ -377,9 +378,74 @@ def build() -> None:
         "adjudicatarios": adj_out,
         "contratos": contratos,
     }
-    OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "contratos.json").write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")))
+    write_split(out)
     print(f"OK: {tot['contratos']} contratos PRTR, {tot['adjudicados']} adjudicados, {tot['importe']:,.0f} €", file=sys.stderr)
+
+
+# ---------- Salida para la web: índice ligero + detalle en trozos ----------
+CFLAGS = ["licitador_unico", "sin_baja", "ganador_recurrente", "plazo_corto",
+          "negociado_sin_publicidad", "emergencia", "supera_presupuesto"]
+N_TROZOS = 64
+DIR = OUT / "contratos"
+
+
+def cid_de(c: dict) -> str:
+    if c.get("cid"):
+        return c["cid"]
+    m = re.search(r"idEvl=([^&]+)", c.get("url") or "")
+    return urllib.parse.unquote(m.group(1)) if m else (c.get("exp") or "") + "|" + (c.get("organo") or "")
+
+
+def trozo(cid: str) -> int:
+    """FNV-1a de 32 bits (igual que en site/app.js) módulo N_TROZOS."""
+    h = 0x811C9DC5
+    for ch in cid:
+        h ^= ord(ch)
+        h = (h * 0x01000193) & 0xFFFFFFFF
+    return h % N_TROZOS
+
+
+def write_split(out: dict) -> None:
+    """Escribe site/data/contratos/indice.json (lo que necesitan listado, búsqueda
+    y ranking, con textos repetidos en diccionarios) y det/NN.json (fichas completas)."""
+    dic = {"org": [], "proc": [], "emp": [], "flags": CFLAGS}
+    idx = {"org": {}, "proc": {}, "emp": {}}
+
+    def ref(kind, key, value):
+        i = idx[kind].get(key)
+        if i is None:
+            i = idx[kind][key] = len(dic[kind])
+            dic[kind].append(value)
+        return i
+
+    cols = {k: [] for k in ("id", "exp", "org", "proc", "emp", "imp", "fecha", "of", "fl")}
+    textos = []
+    trozos = [dict() for _ in range(N_TROZOS)]
+    for c in out["contratos"]:
+        cid = cid_de(c)
+        c = {**c, "cid": cid}
+        c.pop("url", None)  # se reconstruye a partir del cid
+        cols["id"].append(cid)
+        cols["exp"].append(c.get("exp") or "")
+        textos.append(re.sub(r"\s+", " ", c.get("objeto") or "").strip()[:100])
+        cols["org"].append(ref("org", c.get("organo") or "", [c.get("organo") or "", c.get("ambito") or "", c.get("ruta") or ""]))
+        cols["proc"].append(ref("proc", c.get("proc") or "", c.get("proc") or ""))
+        cols["emp"].append([ref("emp", (a.get("nif") or a["nombre"]).upper(), [a["nombre"], a.get("nif") or ""]) for a in c.get("adj", [])])
+        cols["imp"].append(round(c.get("importe") or 0))
+        cols["fecha"].append(c.get("fecha") or "")
+        cols["of"].append(c.get("ofertas"))
+        cols["fl"].append(sum(1 << i for i, f in enumerate(CFLAGS) if f in c.get("flags", [])))
+        trozos[trozo(cid)][cid] = c
+
+    DIR.mkdir(parents=True, exist_ok=True)
+    (DIR / "det").mkdir(exist_ok=True)
+    meta = {k: out[k] for k in ("generado", "fuente", "totales", "indicadores", "por_procedimiento")}
+    dump = lambda path, obj: path.write_text(json.dumps(obj, ensure_ascii=False, separators=(",", ":")))
+    dump(DIR / "indice.json", {**meta, "n_trozos": N_TROZOS, "dic": dic, "cols": cols})
+    dump(DIR / "textos.json", textos)  # objeto de cada contrato (mismo orden); solo lo carga el listado
+    for i, t in enumerate(trozos):
+        dump(DIR / "det" / f"{i:02d}.json", t)
+    (OUT / "contratos.json").unlink(missing_ok=True)  # formato antiguo, de un solo fichero
 
 
 def main() -> None:
@@ -388,9 +454,13 @@ def main() -> None:
     ap.add_argument("--keep-zips", action="store_true")
     ap.add_argument("--refresh-last", type=int, default=2, help="re-procesa los N últimos periodos")
     ap.add_argument("--build-only", action="store_true")
+    ap.add_argument("--split-from", help="convierte un contratos.json antiguo al formato en trozos y sale")
     ap.add_argument("--no-build", action="store_true", help="solo descarga y extrae (para trabajos en paralelo)")
     ap.add_argument("--list-months", nargs=2, metavar=("DESDE", "HASTA"), help="imprime los meses como JSON y sale")
     args = ap.parse_args()
+    if args.split_from:
+        write_split(json.loads(Path(args.split_from).read_text()))
+        return
     if args.list_months:
         print(json.dumps(month_range(*args.list_months)))
         return

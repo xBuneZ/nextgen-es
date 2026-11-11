@@ -28,7 +28,7 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA = ROOT / "site" / "data" / "contratos.json"
+DATA = ROOT / "site" / "data" / "contratos" / "det"  # fichas completas, repartidas en trozos
 STATE = ROOT / "etl" / "bot_estado.json"
 SITE = os.environ.get("SITE_URL", "https://xbunez.github.io/nextgen-es/")
 MIN_IMPORTE = 300_000
@@ -43,6 +43,8 @@ def eur(n: float) -> str:
 
 
 def cid(c: dict) -> str:
+    if c.get("cid"):
+        return c["cid"]
     m = re.search(r"idEvl=([^&]+)", c.get("url") or "")
     return urllib.parse.unquote(m.group(1)) if m else ""
 
@@ -161,7 +163,7 @@ def main() -> None:
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
-    d = json.loads(DATA.read_text())
+    d = {"contratos": [c for f in sorted(DATA.glob("*.json")) for c in json.loads(f.read_text()).values()]}
     estado = json.loads(STATE.read_text()) if STATE.exists() else {"publicados": []}
     ya = {p["id"] for p in estado["publicados"]}
     bsky = bool(os.environ.get("BSKY_HANDLE") and os.environ.get("BSKY_APP_PASSWORD"))

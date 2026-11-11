@@ -220,7 +220,6 @@ def build(records: list[dict]) -> None:
             "sectores": [s.get("descripcion", "") for s in det.get("sectores") or []][:5],
             "regiones": [r.get("descripcion", "").strip() for r in det.get("regiones") or []][:5],
             "bases_url": det.get("urlBasesReguladoras") or "",
-            "ficha_url": FICHA_CONV.format(num),
             "top": [{"nombre": b["nombre"], "nif": b["nif"], "importe": r2(b["importe"]), "n": b["n"]} for b in top[:25]],
             "flags": flags,
         })
@@ -277,7 +276,19 @@ def build(records: list[dict]) -> None:
 
     OUT.mkdir(parents=True, exist_ok=True)
     dump = lambda name, obj: (OUT / name).write_text(json.dumps(obj, ensure_ascii=False, separators=(",", ":")))
+    # Listado ligero: 5 mayores beneficiarios por convocatoria. La lista completa
+    # (25) va en trozos que la web carga al abrir la ficha: convocatorias/det/NN.json
+    N = 16
+    trozos = [dict() for _ in range(N)]
+    for c in convs_out:
+        if len(c["top"]) > 5:
+            trozos[int(c["id"]) % N if str(c["id"]).isdigit() else 0][str(c["id"])] = c["top"]
+            c["top"] = c["top"][:5]
+            c["top_mas"] = True
     dump("convocatorias.json", convs_out)
+    (OUT / "convocatorias" / "det").mkdir(parents=True, exist_ok=True)
+    for i, t in enumerate(trozos):
+        dump(f"convocatorias/det/{i:02d}.json", t)
     dump("beneficiarios.json", benef_out)
     dump("resumen.json", resumen)
     print(f"OK: {tot['convocatorias']} convocatorias, {tot['concesiones']} concesiones, "
