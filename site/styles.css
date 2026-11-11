@@ -272,3 +272,9 @@ h2.sect { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; col
 .chk input { width: 18px; height: 18px; }
 .mp { color: var(--warn-fg); }
 .ct b:last-child { white-space: nowrap; }
+
+/* Compartir y foco de teclado */
+.share { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); }
+.share .sub { margin: 0 4px 0 0; }
+button.btn-sm { font: inherit; font-size: 12px; background: var(--surface); cursor: pointer; }
+tr[tabindex]:focus-visible, a:focus-visible, button:focus-visible, .row:focus-visible { outline: 3px solid var(--c3); outline-offset: -3px; }

@@ -154,7 +154,7 @@ function fillHome() {
           <li><span>${t("cflag_negociado_sin_publicidad")}</span><b>${num(I.negociado_sin_publicidad || 0)}</b></li>
           <li><span>${t("cflag_plazo_corto")}</span><b>${num(I.plazo_corto || 0)}</b></li>
         </ul>`, btn("#/contratos", t("see_all")))}</div>
-      <div class="col">${d.ranking_top ? card(t("hc_rank"), t("hc_rank_sub").replace("{m}", pctf(d.media_sin_comp || 0)), `<ol class="mini-rank">${d.ranking_top.map((r) => `<li><a href="#/contratos" data-cq="${esc(r.organo)}">${esc(prettyOrg(r.organo))}</a>
+      <div class="col">${d.ranking_top ? card(t("hc_rank"), t("hc_rank_sub").replace("{m}", pctf(d.media_sin_comp || 0)), `<ol class="mini-rank">${d.ranking_top.map((r) => `<li><a href="${cHref(r.organo)}">${esc(prettyOrg(r.organo))}</a>
           <span class="pbar"><span style="width:${Math.round(100 * r.pct)}%"></span></span><b>${pctf(r.pct)}</b></li>`).join("")}</ol>`, btn("#/ranking", t("nav_ranking"))) : ""}</div>
       <div class="col">${d.destacados ? card(t("hc_cases"), t("hc_cases_sub"), `<div class="cases">${d.destacados.map((c) => `<a class="case" href="#/contrato/${encodeURIComponent(c.cid)}">
           <span class="ct"><b>${esc(c.adj)}</b><b>${eurShort(c.importe)}</b></span><span class="sub">${esc(oneLine(c.objeto, 100))}</span>
@@ -328,12 +328,26 @@ async function showProject(id) {
     ${c.top.length ? `<div class="table-wrap"><table><tbody>${c.top.map((b) => `<tr data-k="${esc(b.nif || b.nombre)}"><td>${esc(b.nombre)}<div class="t-sub">${esc(b.nif || "")}</div></td><td class="num">${eur(b.importe)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">${t("none")}</p>`}
     ${explainBlock("s", "s:" + c.id, c, c.nivel3 || c.nivel2, c.nivel1 === "ESTADO")}
     <h2>${t("m_signal")}</h2>
-    <a class="btn-sm" href="${issueUrl(c)}" target="_blank" rel="noopener">${t("m_signal_btn")} ↗</a>`);
+    <a class="btn-sm" href="${issueUrl(c)}" target="_blank" rel="noopener">${t("m_signal_btn")} ↗</a>
+    ${shareBlock(t("share_s").replace("{o}", prettyOrg(c.nivel3 || c.nivel2)).replace("{i}", eurShort(c.importe)).replace("{t}", oneLine(c.titulo, 90)) + (c.flags.length ? ` (${shareFlags(c.flags, "flag_")})` : "") + ". " + t("share_tail"), "#/proyecto/" + c.id)}`);
   $("#modal-body").addEventListener("click", (e) => {
     const tr = e.target.closest("tr[data-k]");
     if (tr) { location.hash = `#/beneficiario/${encodeURIComponent(tr.dataset.k)}`; }
   }, { once: true });
 }
+
+// ---------- Compartir ----------
+function shareBlock(text, path) {
+  const url = location.origin + location.pathname + path;
+  const e = encodeURIComponent, full = text + " " + url;
+  return `<div class="share" data-url="${esc(url)}" data-text="${esc(text)}"><span class="sub">${t("share")}</span>
+    <a class="btn-sm" href="https://bsky.app/intent/compose?text=${e(full)}" target="_blank" rel="noopener">Bluesky</a>
+    <a class="btn-sm" href="https://twitter.com/intent/tweet?text=${e(text)}&url=${e(url)}" target="_blank" rel="noopener">X</a>
+    <a class="btn-sm" href="https://wa.me/?text=${e(full)}" target="_blank" rel="noopener">WhatsApp</a>
+    <a class="btn-sm" href="https://t.me/share/url?url=${e(url)}&text=${e(text)}" target="_blank" rel="noopener">Telegram</a>
+    <button type="button" class="btn-sm copylink">${t("share_copy")}</button></div>`;
+}
+const shareFlags = (flags, pref) => (flags || []).slice(0, 2).map((f) => t(pref + f).toLowerCase()).join(", ");
 
 function openModal(html) {
   $("#modal-body").innerHTML = html;
@@ -343,25 +357,46 @@ function openModal(html) {
 }
 
 function viewMethod() {
-  const flags = FLAGS.map((f) => `<li><b>${esc(t("flag_" + f))}</b> — ${esc(t("flagd_" + f))}</li>`).join("");
-  return lang === "es" ? `<div class="prose"><h1>Metodología</h1>
-    <p>Los datos proceden de la <a href="https://www.infosubvenciones.es" target="_blank" rel="noopener">Base de Datos Nacional de Subvenciones (BDNS)</a>, el registro oficial donde todas las administraciones españolas están obligadas a publicar sus convocatorias de ayudas y las concesiones. Se descargan todas las convocatorias marcadas como financiadas por el <b>Mecanismo de Recuperación y Resiliencia (MRR)</b> y, para cada una, todas sus concesiones.</p>
-    <h2>Limitaciones</h2><ul>
-      <li>Se incluyen <b>subvenciones</b> (BDNS) y <b>contratos públicos</b> (Plataforma de Contratación del Sector Público; metodología detallada en el repositorio). Los contratos menores y las transferencias entre administraciones fuera de la BDNS aún no están incluidos.</li>
-      <li>Si una administración no marca correctamente la financiación MRR o no publica sus concesiones, no aparece aquí.</li>
-      <li>Las concesiones a <b>personas físicas</b> se agregan y no se muestran de forma individual por protección de datos.</li>
-      <li>El importe "concedido" es lo publicado en la BDNS, no lo efectivamente pagado.</li></ul>
-    <h2>Indicadores</h2><p>Son reglas automáticas y transparentes, inspiradas en metodologías de riesgo en contratación pública (p. ej. las de la OCDE y la Comisión Europea). <b>Un indicador no implica irregularidad</b>: muchas concesiones directas o nominativas son perfectamente legales. Sirven para priorizar qué mirar.</p><ul>${flags}</ul>
-    <p>El código es abierto: cualquiera puede verificar cómo se calcula cada cifra.</p></div>`
-  : `<div class="prose"><h1>Methodology</h1>
-    <p>Data comes from Spain's <a href="https://www.infosubvenciones.es" target="_blank" rel="noopener">National Grants Database (BDNS)</a>, the official registry where every Spanish administration must publish its grant calls and awards. We download every call flagged as funded by the <b>Recovery and Resilience Facility (RRF)</b> and all of its awards.</p>
-    <h2>Limitations</h2><ul>
-      <li><b>Grants</b> (BDNS) and <b>public contracts</b> (Public Sector Procurement Platform; detailed methodology in the repository) are covered. Minor contracts and transfers between administrations outside the BDNS are not yet included.</li>
-      <li>If an administration does not flag RRF funding correctly or does not publish its awards, it will not appear here.</li>
-      <li>Awards to <b>private individuals</b> are aggregated and not shown individually, for data protection.</li>
-      <li>"Awarded" is the amount published in the BDNS, not the amount actually paid.</li></ul>
-    <h2>Indicators</h2><p>Automatic, transparent rules inspired by red-flag methodologies for public spending (e.g. OECD and European Commission). <b>An indicator does not imply wrongdoing</b>: many direct or named grants are entirely legal. They help prioritise what to look at.</p><ul>${flags}</ul>
-    <p>The code is open source: anyone can check how each figure is computed.</p></div>`;
+  const li = (list, pref) => list.map((f) => `<li><b>${esc(t(pref + "_" + f))}</b> — ${esc(t(pref + "d_" + f))}</li>`).join("");
+  const repo = "https://github.com/xBuneZ/nextgen-es/blob/main/docs/METODOLOGIA.md";
+  if (lang === "es") return `<div class="prose"><h1>Metodología</h1>
+    <p>Todo lo que muestra esta web sale de registros oficiales y se puede comprobar: cada ficha enlaza a su expediente original. El código es abierto y la <a href="${repo}" target="_blank" rel="noopener">metodología detallada</a> está en el repositorio.</p>
+    <h2>Fuentes</h2><ul>
+      <li><b>Subvenciones:</b> <a href="https://www.infosubvenciones.es" target="_blank" rel="noopener">Base de Datos Nacional de Subvenciones (BDNS)</a>. Todas las convocatorias marcadas como financiadas por el Mecanismo de Recuperación y Resiliencia, con todas sus concesiones.</li>
+      <li><b>Contratos:</b> datos abiertos de la <a href="https://contrataciondelsectorpublico.gob.es" target="_blank" rel="noopener">Plataforma de Contratación del Sector Público</a>, incluidas las plataformas autonómicas que agrega (Cataluña, Andalucía, País Vasco, Madrid, Galicia, Navarra, La Rioja…). Se incluyen los contratos con código de financiación PRTR o que mencionan el Plan de Recuperación.</li>
+      <li><b>Lo asignado a España:</b> Comisión Europea, propuesta COM(2026) 435.</li></ul>
+    <h2>Cómo se cuentan las cifras</h2><ul>
+      <li>La cifra principal de subvenciones es lo concedido <b>a fondo perdido a empresas, entidades y personas</b>. Lo transferido a administraciones se muestra aparte, porque a menudo lo vuelven a repartir y sumarlo contaría dos veces el mismo dinero. Los avales y préstamos también van aparte, porque se devuelven.</li>
+      <li>«Concedido» y «adjudicado» son importes publicados, no pagos efectivos. Los contratos se dan sin IVA.</li>
+      <li>En los acuerdos marco con varios adjudicatarios, si la suma publicada supera el presupuesto, el contrato computa por su presupuesto (cada adjudicatario suele figurar con el valor máximo del acuerdo).</li>
+      <li>Las concesiones a <b>personas físicas</b> solo se muestran agregadas.</li>
+      <li>Si una actualización llega incompleta (faltan meses o los datos caen más de un 5 %), no se publica y se mantienen los datos anteriores.</li></ul>
+    <h2>Indicadores en subvenciones</h2><ul>${li(FLAGS, "flag")}</ul>
+    <h2>Indicadores en contratos</h2><ul>${li(CFLAGS, "cflag")}</ul>
+    <p>Son reglas automáticas, inspiradas en metodologías de riesgo de la OCDE y la Comisión Europea. <b>Un indicador no implica irregularidad</b>: hay mercados con pocos proveedores y concesiones directas previstas por ley. Sirven para decidir qué mirar.</p>
+    <h2>Ranking de organismos</h2>
+    <p>Porcentaje del importe adjudicado sin competencia real (un solo licitador, negociado sin publicidad o emergencia), comparado con la media. Por defecto aparecen organismos con 20 o más contratos y se excluyen los medios propios (TRAGSA, INECO…), cuyo funcionamiento no es comparable.</p>
+    <h2>Qué no cubre</h2><ul><li>Contratos menores, pagos realmente ejecutados y fondos que las administraciones no hayan publicado o marcado como Plan de Recuperación.</li></ul>
+    <h2>Correcciones</h2><p>Si encuentras un error, <a href="https://github.com/${REPO}/issues/new" target="_blank" rel="noopener">avísanos</a>. Las correcciones se publican.</p></div>`;
+  return `<div class="prose"><h1>Methodology</h1>
+    <p>Everything on this site comes from official registries and can be checked: each record links to its original file. The code is open source and the <a href="${repo}" target="_blank" rel="noopener">detailed methodology</a> (in Spanish) is in the repository.</p>
+    <h2>Sources</h2><ul>
+      <li><b>Grants:</b> Spain's <a href="https://www.infosubvenciones.es" target="_blank" rel="noopener">National Grants Database (BDNS)</a>. Every call flagged as funded by the Recovery and Resilience Facility, with all its awards.</li>
+      <li><b>Contracts:</b> open data from the <a href="https://contrataciondelsectorpublico.gob.es" target="_blank" rel="noopener">Public Sector Procurement Platform</a>, including the regional platforms it aggregates (Catalonia, Andalusia, Basque Country, Madrid, Galicia, Navarre, La Rioja…). Contracts with the PRTR funding code or mentioning the Recovery Plan are included.</li>
+      <li><b>Spain's allocation:</b> European Commission, proposal COM(2026) 435.</li></ul>
+    <h2>How figures are counted</h2><ul>
+      <li>The headline grants figure is what was granted <b>as non-repayable aid to companies, organisations and individuals</b>. Transfers to public administrations are shown separately because they are often re-granted, and adding them would count the same money twice. Guarantees and loans are also separate, because they are repaid.</li>
+      <li>"Granted" and "awarded" are published amounts, not actual payments. Contracts exclude VAT.</li>
+      <li>In framework agreements with several winners, if the published sum exceeds the budget, the contract counts for its budget (each winner is usually recorded with the agreement's full ceiling).</li>
+      <li>Awards to <b>private individuals</b> are only shown in aggregate.</li>
+      <li>If an update arrives incomplete (missing months, or data dropping by more than 5%), it is not published and the previous data stays online.</li></ul>
+    <h2>Grant indicators</h2><ul>${li(FLAGS, "flag")}</ul>
+    <h2>Contract indicators</h2><ul>${li(CFLAGS, "cflag")}</ul>
+    <p>These are automatic rules inspired by OECD and European Commission risk methodologies. <b>An indicator does not imply wrongdoing</b>: some markets have few suppliers and some direct grants are set by law. They help decide what to look at.</p>
+    <h2>Ranking of bodies</h2>
+    <p>Share of the awarded amount without real competition (single bidder, negotiated without notice or emergency), compared with the average. By default it shows bodies with 20+ contracts and excludes in-house entities (TRAGSA, INECO…), whose activity is not comparable.</p>
+    <h2>Not covered</h2><ul><li>Minor contracts, amounts actually paid, and funds that administrations did not publish or flag as Recovery Plan.</li></ul>
+    <h2>Corrections</h2><p>If you find an error, <a href="https://github.com/${REPO}/issues/new" target="_blank" rel="noopener">let us know</a>. Corrections are published.</p></div>`;
 }
 
 function viewReport() {
@@ -462,6 +497,7 @@ function viewContratos() {
 }
 
 function renderContratos() {
+  syncHash("#/contratos", { q: cstate.q, proc: cstate.proc, ambito: cstate.ambito, flag: cstate.flag });
   const q = norm(cstate.q);
   const rows = CT.data.contratos.filter((c) => (!q || c._s.includes(q)) && (!cstate.proc || c.proc === cstate.proc) &&
     (!cstate.ambito || c.ambito === cstate.ambito) &&
@@ -520,7 +556,8 @@ async function showContrato(id) {
       ${row("m_official_c", `<a href="${esc(c.url)}" target="_blank" rel="noopener">${esc((c.url.match(/^https?:\/\/(?:www\.)?([^/]+)/) || [])[1] || "contrataciondelestado.es")} ↗</a>`)}</dl>
     <h2>${t("c_winners")}</h2>
     ${c.adj.length ? `<div class="table-wrap"><table><tbody>${c.adj.map((a) => `<tr><td>${esc(a.nombre)}<div class="t-sub">${esc(a.nif || "")}</div></td><td class="num">${eur(a.importe)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">${t("none")}</p>`}
-    ${explainBlock("c", "c:" + c.cid, c, c.organo, /ESTADO|OTRAS ENTIDADES/.test(c.ambito || ""))}`);
+    ${explainBlock("c", "c:" + c.cid, c, c.organo, /ESTADO|OTRAS ENTIDADES/.test(c.ambito || ""))}
+    ${shareBlock(t("share_c").replace("{o}", prettyOrg(c.organo)).replace("{i}", eurShort(c.importe)).replace("{a}", c.adj[0] ? c.adj[0].nombre : "—") + (c.flags.length ? ` (${shareFlags(c.flags, "cflag_")})` : "") + ". " + t("share_tail"), "#/contrato/" + encodeURIComponent(c.cid))}`);
 }
 
 
@@ -600,6 +637,7 @@ function viewRanking() {
 
 function renderRanking() {
   const isC = rstate.tab === "contratos";
+  syncHash("#/ranking/" + rstate.tab, { q: rstate.q, amb: rstate.amb, min: rstate.min === 20 ? "" : rstate.min, mp: rstate.mp });
   const R = isC ? rankContratos() : rankSubvenciones();
   const q = norm(rstate.q);
   const rows = R.rows.filter((r) => r.n >= rstate.min && (!rstate.amb || r.amb === rstate.amb) && (rstate.mp || !r.mp) && (!q || norm(r.nombre + " " + r.sub).includes(q)));
@@ -631,7 +669,7 @@ function bindRanking() {
     if (s) { const key = s.dataset.sort; rstate.dir = rstate.sort === key ? -rstate.dir : -1; rstate.sort = key; renderRanking(); return; }
     const tr = e.target.closest("tr[data-org]");
     if (!tr) return;
-    if (rstate.tab === "contratos") { Object.assign(cstate, { q: tr.dataset.org, proc: "", ambito: "", flag: "", page: 0 }); location.hash = "#/contratos"; }
+    if (rstate.tab === "contratos") location.hash = cHref(tr.dataset.org);
     else location.hash = `#/proyectos?q=${encodeURIComponent(tr.dataset.org)}`;
   });
   renderRanking();
@@ -702,6 +740,11 @@ function explainBlock(kind, ref, c, organo, isAGE) {
 }
 
 
+// ---------- Enlaces que conservan los filtros ----------
+const qsOf = (o) => { const p = new URLSearchParams(); for (const [k, v] of Object.entries(o)) if (v !== "" && v != null && v !== false) p.set(k, v === true ? "1" : v); const x = p.toString(); return x ? "?" + x : ""; };
+const cHref = (q) => "#/contratos" + qsOf({ q });
+function syncHash(base, o) { history.replaceState(null, "", base + qsOf(o)); }
+
 // ---------- Empresas: subvenciones + contratos ----------
 const MEDIO_PROPIO = /\bM\.\s?P\.|medio propio|\bTRAGSA|TRAGSATEC/i;
 const EMP = { loading: null, rows: null };
@@ -736,6 +779,7 @@ function viewBenef() {
   <div id="bresults"><p class="muted">${t("loading")}</p></div>`;
 }
 function renderBenefRows() {
+  syncHash("#/beneficiarios", { q: bState.q });
   const q = norm(bState.q);
   const rows = EMP.rows.filter((b) => !q || b._s.includes(q));
   const k = bState.sort, d = bState.dir;
@@ -788,7 +832,8 @@ async function showBenef(key) {
       ${e && e.con ? `<div class="kpi"><b>${pctf(e.pctNo)}</b><span>${t("b_nocomp_long")}</span></div>` : ""}
     </div>
     ${grants ? `<h2>${t("m_convs")}</h2><div class="table-wrap"><table><tbody>${grants}</tbody></table></div>` : ""}
-    <div id="b-contr">${e && e.con ? `<h2>${t("b_contracts_won")}</h2><p class="muted">${t("loading")}</p>` : ""}</div>`);
+    <div id="b-contr">${e && e.con ? `<h2>${t("b_contracts_won")}</h2><p class="muted">${t("loading")}</p>` : ""}</div>
+    ${shareBlock(t("share_b").replace("{n}", nombre).replace("{i}", eurShort(e ? e.total : b.importe)) + (e && e.con ? " " + t("share_b_nc").replace("{p}", pctf(e.pctNo)) : "") + " " + t("share_tail"), "#/beneficiario/" + encodeURIComponent(key))}`);
   if (e && e.con) {
     await loadContratos();
     const k = (nif || nombre).toUpperCase();
@@ -814,10 +859,10 @@ async function runSearch(q) {
   const render = (contr, orgs) => {
     if (!box()) return;
     box().innerHTML = `<div class="cols">
-      <div class="col">${sec(t("nav_benef"), emps.length, emps.slice(0, 8).map((e) => `<li><a href="#/beneficiario/${encodeURIComponent(e.key)}">${esc(e.nombre)}</a><span>${eurShort(e.total)}</span></li>`).join(""), `<a class="btn-sm" href="#/beneficiarios" data-bq="${esc(q)}">${t("see_all")}</a>`)}
-        ${sec(t("search_orgs"), orgs ? orgs.length : 0, (orgs || []).slice(0, 8).map((o) => `<li><a href="#/contratos" data-cq="${esc(o.nombre)}">${esc(o.nombre)}</a><span>${num(o.n)} ${t("b_n_contracts")}</span></li>`).join(""), "")}</div>
+      <div class="col">${sec(t("nav_benef"), emps.length, emps.slice(0, 8).map((e) => `<li><a href="#/beneficiario/${encodeURIComponent(e.key)}">${esc(e.nombre)}</a><span>${eurShort(e.total)}</span></li>`).join(""), `<a class="btn-sm" href="#/beneficiarios${qsOf({ q })}">${t("see_all")}</a>`)}
+        ${sec(t("search_orgs"), orgs ? orgs.length : 0, (orgs || []).slice(0, 8).map((o) => `<li><a href="${cHref(o.nombre)}">${esc(o.nombre)}</a><span>${num(o.n)} ${t("b_n_contracts")}</span></li>`).join(""), "")}</div>
       <div class="col">${sec(t("nav_projects"), projs.length, projs.slice(0, 8).map((c) => `<li><a href="#/proyecto/${c.id}">${esc(oneLine(c.titulo, 110))}</a><span>${eurShort(c.importe)}</span></li>`).join(""), `<a class="btn-sm" href="#/proyectos?q=${encodeURIComponent(q)}">${t("see_all")}</a>`)}</div>
-      <div class="col">${contr ? sec(t("nav_contracts"), contr.length, contr.slice(0, 8).map((c) => `<li><a href="#/contrato/${encodeURIComponent(c.cid)}">${esc(oneLine(c.objeto, 110))}</a><span>${eurShort(c.importe)}</span></li>`).join(""), `<a class="btn-sm" href="#/contratos" data-cq="${esc(q)}">${t("see_all")}</a>`) : `<section class="card sres"><h2>${t("nav_contracts")}</h2><p class="muted">${t("loading")}</p></section>`}</div>
+      <div class="col">${contr ? sec(t("nav_contracts"), contr.length, contr.slice(0, 8).map((c) => `<li><a href="#/contrato/${encodeURIComponent(c.cid)}">${esc(oneLine(c.objeto, 110))}</a><span>${eurShort(c.importe)}</span></li>`).join(""), `<a class="btn-sm" href="${cHref(q)}">${t("see_all")}</a>`) : `<section class="card sres"><h2>${t("nav_contracts")}</h2><p class="muted">${t("loading")}</p></section>`}</div>
     </div>`;
   };
   render(null, null);
@@ -851,13 +896,20 @@ function route() {
     for (const k of ["q", "admin", "flag", "tipo", "min"]) state[k] = p.get(k) || "";
     state.page = 0;
     app.innerHTML = viewProjects(); bindProjects();
-  } else if (view === "beneficiarios") { app.innerHTML = viewBenef(); bindBenef(); }
+  } else if (view === "beneficiarios") {
+    bState.q = new URLSearchParams(qs || "").get("q") || ""; bState.page = 0;
+    app.innerHTML = viewBenef(); bindBenef();
+  }
   else if (view === "contratos") {
+    const p = new URLSearchParams(qs || "");
+    Object.assign(cstate, { q: p.get("q") || "", proc: p.get("proc") || "", ambito: p.get("ambito") || "", flag: p.get("flag") || "", page: 0 });
     app.innerHTML = `<p class="muted">${t("loading")}</p>`;
     loadTextos().then(() => { if (app.dataset.view === "contratos") { app.innerHTML = viewContratos(); bindContratos(); } });
   }
   else if (view === "ranking") {
     rstate.tab = parts[1] === "subvenciones" ? "subvenciones" : "contratos";
+    const p = new URLSearchParams(qs || "");
+    Object.assign(rstate, { q: p.get("q") || "", amb: p.get("amb") || "", min: Number(p.get("min") || 20), mp: p.get("mp") === "1" });
     const go = () => { if (app.dataset.view === "ranking") { app.innerHTML = viewRanking(); bindRanking(); } };
     if (rstate.tab === "contratos") { app.innerHTML = `<p class="muted">${t("loading")}</p>`; loadContratos().then(go); } else go();
   }
@@ -882,6 +934,13 @@ $("#modal").addEventListener("close", () => {
   else location.hash = m[1] === "contrato" ? "#/contratos" : m[1] === "beneficiario" ? "#/beneficiarios" : "#/proyectos";
 });
 $("#modal-body").addEventListener("click", (e) => {
+  const cl = e.target.closest("button.copylink");
+  if (cl) {
+    const u = cl.closest(".share").dataset.url;
+    (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).catch(() => prompt("", u));
+    cl.textContent = t("sol_copied");
+    return;
+  }
   const tc = e.target.closest("tr[data-cid]");
   if (tc) { location.hash = `#/contrato/${tc.dataset.cid}`; return; }
   const tp = e.target.closest("#modal-body tr[data-id]");
@@ -899,12 +958,12 @@ $("#lang").addEventListener("click", () => {
   applyI18n(); delete $("#app").dataset.view; route();
 });
 window.addEventListener("hashchange", () => { inApp = true; route(); });
-// Enlaces que abren Contratos o Beneficiarios ya filtrados
-document.addEventListener("click", (e) => {
-  const a = e.target.closest("a[data-cq], a[data-bq]");
-  if (!a) return;
-  if (a.dataset.cq != null) Object.assign(cstate, { q: a.dataset.cq, proc: "", ambito: "", flag: "", page: 0 });
-  if (a.dataset.bq != null) Object.assign(bState, { q: a.dataset.bq, page: 0 });
+// Accesibilidad: las filas clicables se pueden recorrer con Tab y abrir con Enter
+const ROWSEL = "tr[data-id], tr[data-k], tr[data-ci], tr[data-cid], tr[data-org]";
+new MutationObserver(() => document.querySelectorAll(ROWSEL).forEach((tr) => { if (!tr.hasAttribute("tabindex")) { tr.tabIndex = 0; tr.setAttribute("role", "link"); } }))
+  .observe(document.body, { childList: true, subtree: true });
+document.addEventListener("keydown", (e) => {
+  if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches(ROWSEL)) { e.preventDefault(); e.target.click(); }
 });
 $("#hsearch").addEventListener("submit", (e) => {
   e.preventDefault();
