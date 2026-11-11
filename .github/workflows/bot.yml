@@ -1,0 +1,50 @@
+name: Bot de redes sociales
+
+# Publica en Bluesky y Mastodon los contratos recientes con indicadores de falta
+# de competencia. Sin secretos configurados funciona en modo prueba.
+on:
+  workflow_run:
+    workflows: ["Actualizar contratos"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Modo prueba (no publica)"
+        type: boolean
+        default: true
+      max:
+        description: "Publicaciones como máximo"
+        default: "4"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bot
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Publicar
+        env:
+          BSKY_HANDLE: ${{ secrets.BSKY_HANDLE }}
+          BSKY_APP_PASSWORD: ${{ secrets.BSKY_APP_PASSWORD }}
+          MASTODON_INSTANCE: ${{ secrets.MASTODON_INSTANCE }}
+          MASTODON_TOKEN: ${{ secrets.MASTODON_TOKEN }}
+        run: python3 etl/bot.py --max ${{ inputs.max || '4' }} ${{ inputs.dry_run && '--dry-run' || '' }} | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Guardar registro de publicaciones
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          [ -f etl/bot_estado.json ] || exit 0
+          git add etl/bot_estado.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Bot: registro de publicaciones"
+          git pull --rebase origin main
+          git push

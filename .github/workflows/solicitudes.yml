@@ -1,0 +1,35 @@
+name: Solicitudes de transparencia
+
+on:
+  issues:
+    types: [opened, edited, labeled, unlabeled, closed, reopened, deleted]
+  schedule:
+    - cron: "11 6 * * *"   # a diario, para marcar las que vencen el plazo
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: read
+
+concurrency:
+  group: solicitudes
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.event_name != 'issues' || contains(github.event.issue.labels.*.name, 'transparencia')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 etl/solicitudes.py
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Guardar cambios
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/data/solicitudes.json
+          git diff --cached --quiet && echo "Sin cambios" && exit 0
+          git commit -m "Datos: solicitudes de transparencia"
+          git pull --rebase origin main
+          git push

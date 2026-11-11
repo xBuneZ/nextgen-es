@@ -1,0 +1,51 @@
+name: Registrar una solicitud de transparencia
+description: Has pedido explicaciones a una administración sobre un proyecto o contrato. Regístralo para hacer seguimiento público de su respuesta.
+title: "[Transparencia] "
+labels: ["transparencia"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por pedir cuentas. **No incluyas datos personales** (DNI, dirección, teléfono): basta con la fecha y el número de registro.
+        Cuando recibas respuesta (o pase el plazo), **edita este issue** y cambia el estado. Puedes adjuntar la respuesta en un comentario, tachando antes tus datos personales.
+  - type: input
+    id: ref
+    attributes:
+      label: Referencia en la web
+      description: Se rellena sola desde el botón «Registrar solicitud». No la cambies.
+      placeholder: "c:XXXX o s:123456"
+    validations:
+      required: true
+  - type: input
+    id: organismo
+    attributes:
+      label: Organismo al que se dirige
+    validations:
+      required: true
+  - type: input
+    id: fecha
+    attributes:
+      label: Fecha de presentación
+      placeholder: "AAAA-MM-DD"
+    validations:
+      required: true
+  - type: input
+    id: registro
+    attributes:
+      label: Número de registro o expediente de la solicitud (opcional)
+  - type: dropdown
+    id: estado
+    attributes:
+      label: Estado
+      options:
+        - Pendiente
+        - Respondida
+        - Denegada
+        - Reclamada al Consejo de Transparencia
+      default: 0
+    validations:
+      required: true
+  - type: textarea
+    id: respuesta
+    attributes:
+      label: Resumen de la respuesta (si la hay)

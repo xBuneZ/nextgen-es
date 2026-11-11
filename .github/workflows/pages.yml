@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths: ["site/**"]
   workflow_run:
-    workflows: ["Actualizar datos", "Actualizar contratos", "Carga histórica de contratos"]
+    workflows: ["Actualizar datos", "Actualizar contratos", "Carga histórica de contratos", "Solicitudes de transparencia"]
     types: [completed]
   workflow_dispatch:
 

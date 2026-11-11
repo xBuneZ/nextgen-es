@@ -43,3 +43,24 @@ Un contrato se incluye si su código de financiación (`FundingProgramCode`) es 
 | `ganador_recurrente` | La misma empresa (NIF) gana ≥3 contratos del mismo órgano con un solo licitador o por negociado sin publicidad. No cuentan los contratos con más de dos adjudicatarios (acuerdos marco con muchos proveedores) |
 
 Importes sin IVA.
+
+# Ranking de organismos
+
+Se calcula en el navegador con los mismos datos de la web.
+
+- **Contratos:** por órgano de contratación, porcentaje del importe adjudicado en contratos con un solo licitador, negociados sin publicidad o de emergencia. Se compara con la media global ("× la media"). Por defecto se muestran órganos con 20 o más contratos adjudicados, para evitar extremos por azar.
+- **Subvenciones:** por órgano concedente, porcentaje del importe concedido por concesión directa o nominativa, y número de convocatorias sin concesiones publicadas tras 18 meses (con su presupuesto).
+
+Un porcentaje alto no implica irregularidad: hay mercados con pocos proveedores y concesiones directas previstas por ley.
+
+# Solicitudes de transparencia
+
+Cada ficha genera un texto de solicitud de acceso a la información (Ley 19/2013 o la ley autonómica aplicable) adaptado a sus indicadores. Quien la presenta puede registrarla como *issue* con la plantilla «Registrar una solicitud de transparencia». El workflow `solicitudes.yml` reúne esos issues en `site/data/solicitudes.json`:
+
+- Estado según el desplegable del issue o las etiquetas `respondida`, `denegada` o `reclamada`.
+- Una solicitud pendiente con más de 31 días desde su presentación pasa a «sin respuesta (fuera de plazo)». El plazo legal es de un mes, ampliable otro si se notifica.
+- Los issues con etiqueta `invalida` o `spam` se ignoran.
+
+# Bot de redes sociales
+
+`etl/bot.py` publica, después de cada actualización semanal de contratos, hasta 4 contratos adjudicados en los últimos 14 días, de 300.000 € o más, con alguno de estos indicadores: precio máximo sin competencia, negociado sin publicidad, plazo corto, ganador recurrente, un solo licitador o emergencia. Cada mensaje se limita a hechos de los datos oficiales y enlaza a la ficha. Los ya publicados se guardan en `etl/bot_estado.json` para no repetirlos.

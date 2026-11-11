@@ -218,3 +218,22 @@ dl.meta dd { margin: 0; }
 .table-wrap .tag[data-f] { cursor: pointer; }
 .table-wrap .tag[data-f]:hover { outline: 1px solid var(--c3); }
 .chips-note { flex-basis: 100%; margin: 0; }
+
+/* Ranking */
+.tabs { display: flex; gap: 4px; margin: 0 0 8px; border-bottom: 1px solid var(--line); }
+.tabs a { padding: 10px 16px; text-decoration: none; color: var(--muted); font-weight: 500; border-bottom: 3px solid transparent; margin-bottom: -1px; }
+.tabs a[aria-selected="true"] { color: var(--c1-ink); border-color: var(--c3); }
+.pbar { height: 6px; border-radius: 3px; background: var(--soft); margin: 6px 0 2px auto; width: 120px; max-width: 100%; }
+.pbar span { display: block; height: 6px; border-radius: 3px; background: var(--c1); }
+td .sub { font-weight: 400; }
+
+/* Pide explicaciones */
+.explain { margin-top: 8px; }
+.explain details { margin-top: 8px; }
+.explain summary { list-style: none; width: fit-content; }
+.explain summary::-webkit-details-marker { display: none; }
+.steps { padding-left: 20px; margin: 16px 0 0; display: flex; flex-direction: column; gap: 14px; font-size: 14px; }
+.steps .sub { margin-top: 4px; }
+.req { width: 100%; margin: 8px 0; font: inherit; font-size: 13px; line-height: 1.5; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--soft); color: var(--text); resize: vertical; }
+.sol-status { font-size: 14px; margin: 4px 0; }
+.sol-list { font-size: 13px; margin: 4px 0 0; padding-left: 18px; }

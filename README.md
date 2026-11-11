@@ -11,6 +11,10 @@ Web ciudadana y de código abierto para consultar **en qué gasta España los fo
 - **Beneficiarios**: cuánto ha recibido cada empresa o entidad y de qué convocatorias.
 - **Indicadores automáticos**: señales objetivas (concesión directa, subvención nominativa, concentración en un beneficiario, importe superior al presupuesto, falta de publicación…) para priorizar qué revisar. **No son acusaciones.**
 - **Proponer para revisión**: cada ficha tiene un botón que abre un *issue* en este repositorio con los datos ya rellenados.
+- **Contratos**: contratos públicos del Plan de Recuperación (Plataforma de Contratación) con indicadores de falta de competencia.
+- **Ranking de organismos**: qué órganos adjudican más dinero sin competencia, comparados con la media.
+- **Pide explicaciones**: cada ficha genera una solicitud de acceso a la información (Ley de Transparencia) lista para presentar, y permite registrarla para seguir públicamente si responden.
+- **Bot de redes sociales**: publica cada semana en Bluesky y Mastodon los contratos nuevos con indicadores.
 - **Denunciar**: enlaces a los canales oficiales (EPPO, OLAF, SNCA).
 
 ## Datos
@@ -41,6 +45,15 @@ python3 -m http.server -d site 8000       # abre http://localhost:8000
 1. *Settings → Pages → Source: GitHub Actions*.
 2. Cambia la constante `REPO` en `site/app.js` por `tu-usuario/nextgen-es` (para el botón «Proponer para revisión»).
 3. Crea la etiqueta `revision` en *Issues → Labels*.
+
+## Activar el bot de redes sociales
+
+Sin credenciales el bot funciona en modo prueba: escribe en el resumen del workflow lo que publicaría. Para que publique:
+
+1. **Bluesky:** crea la cuenta y una *contraseña de aplicación* (Ajustes → Privacidad y seguridad → Contraseñas de aplicación).
+2. **Mastodon:** crea la cuenta en una instancia que acepte bots (por ejemplo `botsin.space` o `mastodon.social`). En Preferencias → Desarrollo, crea una aplicación con el permiso `write:statuses` y copia su token.
+3. En GitHub, ve a *Settings → Secrets and variables → Actions → New repository secret* y añade `BSKY_HANDLE`, `BSKY_APP_PASSWORD`, `MASTODON_INSTANCE` (URL completa) y `MASTODON_TOKEN`. Basta con una de las dos redes.
+4. Prueba desde *Actions → Bot de redes sociales → Run workflow* con «Modo prueba» marcado, y después sin marcar.
 
 ## Principios
 

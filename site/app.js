@@ -286,8 +286,9 @@ function showProject(id) {
       ${c.bases_url ? row("m_bases", `<a href="${esc(c.bases_url)}" target="_blank" rel="noopener">${esc(t("m_bases"))} ↗</a>`) : ""}</dl>
     <h2>${t("m_topb")}</h2>
     ${c.top.length ? `<div class="table-wrap"><table><tbody>${c.top.map((b) => `<tr data-k="${esc(b.nif || b.nombre)}"><td>${esc(b.nombre)}<div class="t-sub">${esc(b.nif || "")}</div></td><td class="num">${eur(b.importe)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">${t("none")}</p>`}
+    ${explainBlock("s", "s:" + c.id, c, c.nivel3 || c.nivel2, c.nivel1 === "ESTADO")}
     <h2>${t("m_signal")}</h2>
-    <a class="btn" href="${issueUrl(c)}" target="_blank" rel="noopener">${t("m_signal_btn")} ↗</a>`);
+    <a class="btn-sm" href="${issueUrl(c)}" target="_blank" rel="noopener">${t("m_signal_btn")} ↗</a>`);
   $("#modal-body").addEventListener("click", (e) => {
     const tr = e.target.closest("tr[data-k]");
     if (tr) { location.hash = `#/beneficiario/${encodeURIComponent(tr.dataset.k)}`; }
@@ -324,7 +325,7 @@ function viewMethod() {
   return lang === "es" ? `<div class="prose"><h1>Metodología</h1>
     <p>Los datos proceden de la <a href="https://www.infosubvenciones.es" target="_blank" rel="noopener">Base de Datos Nacional de Subvenciones (BDNS)</a>, el registro oficial donde todas las administraciones españolas están obligadas a publicar sus convocatorias de ayudas y las concesiones. Se descargan todas las convocatorias marcadas como financiadas por el <b>Mecanismo de Recuperación y Resiliencia (MRR)</b> y, para cada una, todas sus concesiones.</p>
     <h2>Limitaciones</h2><ul>
-      <li>Solo se incluyen <b>subvenciones y ayudas</b>. Los <b>contratos públicos</b> financiados con el Plan de Recuperación (publicados en la Plataforma de Contratación del Sector Público) y las transferencias entre administraciones aún no están incluidos.</li>
+      <li>Se incluyen <b>subvenciones</b> (BDNS) y <b>contratos públicos</b> (Plataforma de Contratación del Sector Público; metodología detallada en el repositorio). Los contratos menores y las transferencias entre administraciones fuera de la BDNS aún no están incluidos.</li>
       <li>Si una administración no marca correctamente la financiación MRR o no publica sus concesiones, no aparece aquí.</li>
       <li>Las concesiones a <b>personas físicas</b> se agregan y no se muestran de forma individual por protección de datos.</li>
       <li>El importe "concedido" es lo publicado en la BDNS, no lo efectivamente pagado.</li></ul>
@@ -333,7 +334,7 @@ function viewMethod() {
   : `<div class="prose"><h1>Methodology</h1>
     <p>Data comes from Spain's <a href="https://www.infosubvenciones.es" target="_blank" rel="noopener">National Grants Database (BDNS)</a>, the official registry where every Spanish administration must publish its grant calls and awards. We download every call flagged as funded by the <b>Recovery and Resilience Facility (RRF)</b> and all of its awards.</p>
     <h2>Limitations</h2><ul>
-      <li>Only <b>grants and subsidies</b> are covered. <b>Public procurement contracts</b> funded by the Recovery Plan and transfers between administrations are not yet included.</li>
+      <li><b>Grants</b> (BDNS) and <b>public contracts</b> (Public Sector Procurement Platform; detailed methodology in the repository) are covered. Minor contracts and transfers between administrations outside the BDNS are not yet included.</li>
       <li>If an administration does not flag RRF funding correctly or does not publish its awards, it will not appear here.</li>
       <li>Awards to <b>private individuals</b> are aggregated and not shown individually, for data protection.</li>
       <li>"Awarded" is the amount published in the BDNS, not the amount actually paid.</li></ul>
@@ -366,7 +367,8 @@ const cstate = { q: "", proc: "", flag: "", ambito: "", page: 0, sort: "importe"
 function loadContratos() {
   if (!CT.loading) {
     CT.loading = fetch("data/contratos.json").then((r) => (r.ok ? r.json() : null)).then((d) => {
-      if (d) d.contratos.forEach((c, i) => { c._i = i; c._s = norm([c.objeto, c.organo, c.exp, c.ruta, ...c.adj.map((a) => a.nombre + " " + a.nif)].join(" ")); });
+      if (d) CT.byId = new Map();
+      if (d) d.contratos.forEach((c, i) => { c._i = i; c.cid = decodeURIComponent(((c.url || "").match(/idEvl=([^&]+)/) || [])[1] || "n" + i); CT.byId.set(c.cid, c); c._s = norm([c.objeto, c.organo, c.exp, c.ruta, ...c.adj.map((a) => a.nombre + " " + a.nif)].join(" ")); });
       CT.data = d;
       return d;
     }).catch(() => null);
@@ -411,7 +413,7 @@ function renderContratos() {
   const th = (key, l, cls = "") => `<th class="${cls}" data-sort="${key}">${esc(l)}${cstate.sort === key ? (cstate.dir < 0 ? " ↓" : " ↑") : ""}</th>`;
   $("#cresults").innerHTML = `<p class="count">${num(rows.length)} ${t("results")} · ${eur(rows.reduce((s, r) => s + r.importe, 0))}</p>
   <div class="table-wrap"><table><thead><tr>${th("objeto", t("c_object"))}${th("fecha", t("c_date"), "hide-sm")}${th("ofertas", t("c_offers"), "num hide-sm")}${th("importe", t("c_awarded"), "num")}</tr></thead>
-  <tbody>${rows.slice(cstate.page * PAGE, (cstate.page + 1) * PAGE).map((c) => `<tr data-ci="${c._i}">
+  <tbody>${rows.slice(cstate.page * PAGE, (cstate.page + 1) * PAGE).map((c) => `<tr data-ci="${encodeURIComponent(c.cid)}">
     <td class="t-title">${esc(c.objeto)}<div class="t-sub">${esc(c.adj[0] ? c.adj[0].nombre : "—")} · ${esc(c.organo)}</div>${cflagTags(c.flags)}</td>
     <td class="hide-sm">${esc(c.fecha)}</td><td class="num hide-sm">${c.ofertas ?? "—"}</td><td class="num">${eur(c.importe)}</td></tr>`).join("")}</tbody></table></div>
   ${pager(pages, cstate.page)}`;
@@ -438,8 +440,8 @@ function bindContratos() {
   renderContratos();
 }
 
-function showContrato(i) {
-  const c = CT.data && CT.data.contratos[Number(i)];
+function showContrato(id) {
+  const c = CT.data && (CT.byId.get(decodeURIComponent(id || "")) || CT.data.contratos[Number(id)]);
   if (!c) return;
   const row = (k, v) => (v ? `<dt>${t(k)}</dt><dd>${v}</dd>` : "");
   openModal(`<h3>${esc(c.objeto)}</h3>
@@ -455,7 +457,184 @@ function showContrato(i) {
       ${row("c_recurrent", c.recurrente ? `${num(c.recurrente)} ${t("c_recurrent_n")}` : "")}
       ${row("m_official_c", `<a href="${esc(c.url)}" target="_blank" rel="noopener">contrataciondelestado.es ↗</a>`)}</dl>
     <h2>${t("c_winners")}</h2>
-    ${c.adj.length ? `<div class="table-wrap"><table><tbody>${c.adj.map((a) => `<tr><td>${esc(a.nombre)}<div class="t-sub">${esc(a.nif || "")}</div></td><td class="num">${eur(a.importe)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">${t("none")}</p>`}`);
+    ${c.adj.length ? `<div class="table-wrap"><table><tbody>${c.adj.map((a) => `<tr><td>${esc(a.nombre)}<div class="t-sub">${esc(a.nif || "")}</div></td><td class="num">${eur(a.importe)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">${t("none")}</p>`}
+    ${explainBlock("c", "c:" + c.cid, c, c.organo, /ESTADO|OTRAS ENTIDADES/.test(c.ambito || ""))}`);
+}
+
+
+// ---------- Ranking de organismos ----------
+const rstate = { tab: "contratos", q: "", amb: "", min: 20, sort: "pctNo", dir: -1 };
+const NOCOMP_C = ["licitador_unico", "negociado_sin_publicidad", "emergencia"];
+const NOCOMP_S = ["concesion_directa", "nominativa"];
+const RK = {};
+
+function rankContratos() {
+  if (RK.c) return RK.c;
+  const g = new Map();
+  let imp = 0, impNo = 0;
+  for (const c of CT.data.contratos) {
+    if (!(c.importe > 0)) continue;
+    const k = c.organo || "?";
+    let a = g.get(k);
+    if (!a) g.set(k, (a = { nombre: k, sub: c.ruta || c.ambito, amb: c.ambito, n: 0, imp: 0, impNo: 0, uni: 0, neg: 0, plazo: 0, rec: 0 }));
+    const no = c.flags.some((f) => NOCOMP_C.includes(f));
+    a.n++; a.imp += c.importe; if (no) a.impNo += c.importe;
+    if (c.flags.includes("licitador_unico")) a.uni++;
+    if (c.flags.includes("negociado_sin_publicidad")) a.neg++;
+    if (c.flags.includes("plazo_corto")) a.plazo++;
+    if (c.flags.includes("ganador_recurrente")) a.rec++;
+    imp += c.importe; if (no) impNo += c.importe;
+  }
+  const rows = [...g.values()];
+  rows.forEach((a) => { a.pctNo = a.imp ? a.impNo / a.imp : 0; a.pctUni = a.uni / a.n; });
+  return (RK.c = { rows, avg: imp ? impNo / imp : 0 });
+}
+
+function rankSubvenciones() {
+  if (RK.s) return RK.s;
+  const g = new Map();
+  let imp = 0, impNo = 0;
+  for (const c of DB.convs) {
+    const k = c.nivel3 || c.nivel2 || "?";
+    const key = c.nivel2 + "|" + k;
+    let a = g.get(key);
+    if (!a) g.set(key, (a = { nombre: k, sub: c.nivel2 !== k ? c.nivel2 : c.nivel1, amb: c.nivel1, n: 0, imp: 0, impNo: 0, sinc: 0, sincPres: 0 }));
+    const no = c.flags.some((f) => NOCOMP_S.includes(f));
+    a.n++; a.imp += c.importe; if (no) a.impNo += c.importe;
+    if (c.flags.includes("sin_concesiones")) { a.sinc++; a.sincPres += c.presupuesto; }
+    imp += c.importe; if (no) impNo += c.importe;
+  }
+  const rows = [...g.values()];
+  rows.forEach((a) => { a.pctNo = a.imp ? a.impNo / a.imp : 0; });
+  return (RK.s = { rows, avg: imp ? impNo / imp : 0 });
+}
+
+const pctf = (x) => `${(100 * x).toLocaleString(locale(), { maximumFractionDigits: 0 })}%`;
+
+function viewRanking() {
+  const isC = rstate.tab === "contratos";
+  if (isC && !CT.data) return `<h1>${t("rank_title")}</h1><p class="notice">${t("contracts_none")}</p>`;
+  const R = isC ? rankContratos() : rankSubvenciones();
+  const ambs = [...new Set(R.rows.map((r) => r.amb).filter(Boolean))].sort();
+  const opt = (v, l, cur) => `<option value="${esc(v)}" ${String(v) === String(cur) ? "selected" : ""}>${esc(l)}</option>`;
+  return `<div class="hero"><h1>${t("rank_title")}</h1><p class="lead">${esc(t(isC ? "rank_lead_c" : "rank_lead_s"))}</p></div>
+  <div class="tabs" role="tablist">
+    <a role="tab" href="#/ranking/contratos" aria-selected="${isC}">${t("nav_contracts")}</a>
+    <a role="tab" href="#/ranking/subvenciones" aria-selected="${!isC}">${t("rank_grants")}</a>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><b>${pctf(R.avg)}</b><span>${t(isC ? "rank_avg_c" : "rank_avg_s")}</span></div>
+    <div class="kpi"><b>${num(R.rows.length)}</b><span>${t("rank_bodies")}</span></div>
+  </div>
+  <div class="filters">
+    <input type="search" id="rq" placeholder="${esc(t("rank_search"))}" value="${esc(rstate.q)}">
+    <select id="ramb">${opt("", t("all_admins"), rstate.amb)}${ambs.map((a) => opt(a, a, rstate.amb)).join("")}</select>
+    <select id="rmin" aria-label="${esc(t("rank_min"))}">${[1, 5, 10, 20, 50, 100].map((n) => opt(n, `${t("rank_min")}: ${n}`, rstate.min)).join("")}</select>
+  </div>
+  <div id="rresults"></div>
+  <p class="disclaimer">${esc(t(isC ? "rank_note_c" : "rank_note_s"))}</p>`;
+}
+
+function renderRanking() {
+  const isC = rstate.tab === "contratos";
+  const R = isC ? rankContratos() : rankSubvenciones();
+  const q = norm(rstate.q);
+  const rows = R.rows.filter((r) => r.n >= rstate.min && (!rstate.amb || r.amb === rstate.amb) && (!q || norm(r.nombre + " " + r.sub).includes(q)));
+  const k = rstate.sort, d = rstate.dir;
+  rows.sort((a, b) => (a[k] > b[k] ? d : a[k] < b[k] ? -d : b.imp - a.imp));
+  const th = (key, l, cls = "num") => `<th class="${cls}" data-sort="${key}">${esc(l)}${rstate.sort === key ? (rstate.dir < 0 ? " ↓" : " ↑") : ""}</th>`;
+  const bar = (r) => `<div class="pbar"><span style="width:${Math.round(100 * r.pctNo)}%"></span></div>
+    <span class="sub">${R.avg ? (r.pctNo / R.avg).toLocaleString(locale(), { maximumFractionDigits: 1 }) + "× " + t("rank_vs_avg") : ""}</span>`;
+  const cols = isC
+    ? `${th("n", t("nav_contracts"), "num hide-sm")}${th("imp", t("c_awarded"))}${th("pctNo", t("rank_pct_c"))}${th("uni", t("cflag_licitador_unico"), "num hide-sm")}${th("neg", t("rank_neg"), "num hide-sm")}${th("rec", t("rank_rec"), "num hide-sm")}`
+    : `${th("n", t("k_convs"), "num hide-sm")}${th("imp", t("c_amount"))}${th("pctNo", t("rank_pct_s"))}${th("sinc", t("rank_sinc"), "num hide-sm")}`;
+  const cells = (r) => isC
+    ? `<td class="num hide-sm">${num(r.n)}</td><td class="num">${eurShort(r.imp)}</td><td class="num"><b>${pctf(r.pctNo)}</b>${bar(r)}</td><td class="num hide-sm">${num(r.uni)}</td><td class="num hide-sm">${num(r.neg)}</td><td class="num hide-sm">${num(r.rec)}</td>`
+    : `<td class="num hide-sm">${num(r.n)}</td><td class="num">${eurShort(r.imp)}</td><td class="num"><b>${pctf(r.pctNo)}</b>${bar(r)}</td><td class="num hide-sm">${num(r.sinc)}${r.sinc ? `<span class="sub">${eurShort(r.sincPres)}</span>` : ""}</td>`;
+  $("#rresults").innerHTML = `<p class="count">${num(rows.length)} ${t("rank_bodies")}</p>
+  <div class="table-wrap"><table><thead><tr><th class="hide-sm">#</th>${th("nombre", t("rank_body"), "")}${cols}</tr></thead>
+  <tbody>${rows.slice(0, 200).map((r, i) => `<tr data-org="${esc(r.nombre)}"><td class="hide-sm muted">${i + 1}</td>
+    <td class="t-title">${esc(r.nombre)}<div class="t-sub">${esc(r.sub || "")}</div></td>${cells(r)}</tr>`).join("")}</tbody></table></div>`;
+}
+
+function bindRanking() {
+  if (rstate.tab === "contratos" && !CT.data) return;
+  $("#rq").addEventListener("input", (e) => { rstate.q = e.target.value; renderRanking(); });
+  $("#ramb").addEventListener("input", (e) => { rstate.amb = e.target.value; renderRanking(); });
+  $("#rmin").addEventListener("input", (e) => { rstate.min = Number(e.target.value); renderRanking(); });
+  $("#rresults").addEventListener("click", (e) => {
+    const s = e.target.closest("th[data-sort]");
+    if (s) { const key = s.dataset.sort; rstate.dir = rstate.sort === key ? -rstate.dir : -1; rstate.sort = key; renderRanking(); return; }
+    const tr = e.target.closest("tr[data-org]");
+    if (!tr) return;
+    if (rstate.tab === "contratos") { Object.assign(cstate, { q: tr.dataset.org, proc: "", ambito: "", flag: "", page: 0 }); location.hash = "#/contratos"; }
+    else location.hash = `#/proyectos?q=${encodeURIComponent(tr.dataset.org)}`;
+  });
+  renderRanking();
+}
+
+// ---------- Pide explicaciones (Ley 19/2013) ----------
+const SOL = { data: {} };
+fetch("data/solicitudes.json").then((r) => (r.ok ? r.json() : {})).then((d) => { SOL.data = d.solicitudes || {}; }).catch(() => {});
+
+// Nombre reconocible del organismo: "Junta de Gobierno Local del Ayuntamiento de X" -> "Ayuntamiento de X"
+function prettyOrg(o) {
+  o = String(o || "").replace(/\s+/g, " ").trim();
+  let m = o.match(/\(([A-ZÁÉÍÓÚÑ0-9-]{3,})\)\s*$/);
+  if (m) return o;
+  m = o.match(/\b(Ayuntamiento|Ajuntament|Concello|Udala|Diputaci[oó]n?|Cabildo|Consell|Mancomunidad|Comarca)\b.*/i);
+  if (m) return m[0];
+  return o.replace(/^(Presidencia|Alcald[ií]a|Junta de Gobierno( Local)?|Pleno|Consejo de Administraci[oó]n|Consejo Rector|Direcci[oó]n Gerencia|Gerencia|Secretar[ií]a General|Rectorado)\s+(de la|del|de los|de las|de)\s+/i, "");
+}
+const oneLine = (s, n) => { s = String(s || "").replace(/\s+/g, " ").trim(); return s.length > n ? s.slice(0, n - 1).replace(/[ ,.;-]+$/, "") + "…" : s; };
+
+function requestText(kind, c) {
+  const L = [];
+  const ley = "Ley 19/2013, de 9 de diciembre, de transparencia, acceso a la información pública y buen gobierno (o la normativa autonómica de transparencia que resulte aplicable)";
+  if (kind === "c") {
+    const adj = c.adj[0] ? c.adj[0].nombre + (c.adj[0].nif ? ` (${c.adj[0].nif})` : "") : "—";
+    L.push(`Al amparo de la ${ley}, solicito acceso a la siguiente información relativa al contrato «${oneLine(c.objeto, 250)}» (expediente ${c.exp}), tramitado por ${c.organo}, adjudicado a ${adj} por ${eur(c.importe)} (sin IVA) y financiado con cargo al Plan de Recuperación, Transformación y Resiliencia:`);
+    const it = ["Informe de necesidad e idoneidad del contrato y memoria justificativa del expediente.",
+      "Pliegos de cláusulas administrativas particulares y de prescripciones técnicas.",
+      "Actas de la mesa de contratación e informes de valoración de las ofertas."];
+    if (c.flags.includes("licitador_unico") || c.flags.includes("sin_baja")) it.push("Explicación de por qué solo se presentó una oferta y, en su caso, análisis realizado por el órgano de contratación sobre la falta de concurrencia.");
+    if (c.flags.includes("negociado_sin_publicidad")) it.push("Justificación jurídica del uso del procedimiento negociado sin publicidad y relación de empresas invitadas a negociar.");
+    if (c.flags.includes("plazo_corto")) it.push("Justificación del plazo concedido para la presentación de ofertas.");
+    if (c.flags.includes("emergencia")) it.push("Acuerdo de declaración de emergencia y su justificación.");
+    it.push("Estado de ejecución: entregables recibidos, actas de recepción, pagos realizados y, en su caso, modificaciones o prórrogas del contrato.",
+      "Componente, inversión e hito del Plan de Recuperación al que se imputa el gasto.");
+    it.forEach((x, i) => L.push(`${i + 1}. ${x}`));
+  } else {
+    L.push(`Al amparo de la ${ley}, solicito acceso a la siguiente información relativa a la convocatoria «${oneLine(c.titulo, 250)}» (código BDNS ${c.id}), gestionada por ${c.nivel3 || c.nivel2} (${c.nivel2}) y financiada con cargo al Plan de Recuperación, Transformación y Resiliencia (Mecanismo de Recuperación y Resiliencia):`);
+    const it = ["Resoluciones de concesión y relación de beneficiarios con los importes concedidos."];
+    if (c.flags.includes("concesion_directa") || c.flags.includes("nominativa")) it.push("Memoria o informe que justifique la concesión directa o nominativa y las razones por las que no se acudió a un procedimiento de concurrencia competitiva.");
+    if (c.flags.includes("sin_concesiones")) it.push("Motivo por el que no consta ninguna concesión publicada en la Base de Datos Nacional de Subvenciones.");
+    it.push("Justificación del gasto presentada por los beneficiarios e informes de comprobación o control realizados.",
+      "Resultados obtenidos, indicadores de seguimiento y componente, inversión e hito del Plan de Recuperación al que se imputa el gasto.");
+    it.forEach((x, i) => L.push(`${i + 1}. ${x}`));
+  }
+  L.push("Solicito que la información se facilite por medios electrónicos.");
+  return L.join("\n\n");
+}
+
+function explainBlock(kind, ref, c, organo, isAGE) {
+  organo = prettyOrg(organo);
+  const s = SOL.data[ref];
+  const status = s ? `<p class="sol-status">${t("sol_count").replace("{n}", num(s.total))}${s.respondidas ? ` · ${num(s.respondidas)} ${t("sol_answered")}` : ""}${s.vencidas ? ` · <b>${num(s.vencidas)} ${t("sol_overdue")}</b>` : ""}${s.pendientes ? ` · ${num(s.pendientes)} ${t("sol_pending")}` : ""}${s.denegadas ? ` · ${num(s.denegadas)} ${t("sol_denied")}` : ""}</p>
+    <ul class="sol-list">${s.items.slice(0, 5).map((x) => `<li><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(t("sol_state_" + x.estado))}</a>${x.dias != null ? ` · ${num(x.dias)} ${t("c_days")}` : ""}</li>`).join("")}</ul>` : "";
+  const where = isAGE
+    ? `<a href="https://transparencia.gob.es" target="_blank" rel="noopener">${t("sol_where_age")} ↗</a>`
+    : `<a href="https://duckduckgo.com/?q=${encodeURIComponent("portal transparencia solicitud acceso información " + organo)}" target="_blank" rel="noopener">${t("sol_where_other").replace("{o}", esc(organo))} ↗</a>`;
+  const issue = `https://github.com/${REPO}/issues/new?template=transparencia.yml&labels=transparencia&title=${encodeURIComponent(`[Transparencia] ${organo.slice(0, 80)}`)}&ref=${encodeURIComponent(ref)}&organismo=${encodeURIComponent(organo)}`;
+  return `<section class="explain"><h2>${t("sol_title")}</h2>${status}
+    <details><summary class="btn">${t("sol_btn")}</summary>
+      <ol class="steps">
+        <li>${t("sol_step1")}<textarea class="req" readonly rows="10">${esc(requestText(kind, c))}</textarea>
+          <button type="button" class="btn-sm copy">${t("sol_copy")}</button></li>
+        <li>${t("sol_step2")} ${where}<span class="sub">${t("sol_deadline")}</span></li>
+        <li>${t("sol_step3")} <a href="${issue}" target="_blank" rel="noopener">${t("sol_register")} ↗</a><span class="sub">${t("sol_privacy")}</span></li>
+      </ol>
+    </details></section>`;
 }
 
 // ---------- Router ----------
@@ -486,6 +665,11 @@ function route() {
     app.innerHTML = `<p class="muted">${t("loading")}</p>`;
     loadContratos().then(() => { if (app.dataset.view === "contratos") { app.innerHTML = viewContratos(); bindContratos(); } });
   }
+  else if (view === "ranking") {
+    rstate.tab = parts[1] === "subvenciones" ? "subvenciones" : "contratos";
+    const go = () => { if (app.dataset.view === "ranking") { app.innerHTML = viewRanking(); bindRanking(); } };
+    if (rstate.tab === "contratos") { app.innerHTML = `<p class="muted">${t("loading")}</p>`; loadContratos().then(go); } else go();
+  }
   else if (view === "metodologia") app.innerHTML = viewMethod();
   else if (view === "denunciar") app.innerHTML = viewReport();
   else app.innerHTML = viewHome();
@@ -494,15 +678,27 @@ function route() {
 
 $("#modal .close").addEventListener("click", () => $("#modal").close());
 $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") $("#modal").close(); });
+let inApp = false;
 $("#modal").addEventListener("close", () => {
-  if (/^#\/(proyecto|beneficiario|contrato)\//.test(location.hash)) history.back();
+  const m = location.hash.match(/^#\/(proyecto|beneficiario|contrato)\//);
+  if (!m) return;
+  if (inApp) history.back();
+  else location.hash = m[1] === "contrato" ? "#/contratos" : m[1] === "beneficiario" ? "#/beneficiarios" : "#/proyectos";
+});
+$("#modal-body").addEventListener("click", (e) => {
+  const b = e.target.closest("button.copy");
+  if (!b) return;
+  const ta = b.parentElement.querySelector("textarea");
+  ta.select();
+  (navigator.clipboard ? navigator.clipboard.writeText(ta.value) : Promise.reject()).catch(() => document.execCommand("copy"));
+  b.textContent = t("sol_copied");
 });
 $("#lang").addEventListener("click", () => {
   lang = lang === "es" ? "en" : "es";
   try { localStorage.setItem("lang", lang); } catch {}
   applyI18n(); delete $("#app").dataset.view; route();
 });
-window.addEventListener("hashchange", route);
+window.addEventListener("hashchange", () => { inApp = true; route(); });
 $("#hsearch").addEventListener("submit", (e) => {
   e.preventDefault();
   const q = $("#hq").value.trim();
