@@ -45,7 +45,20 @@ function applyI18n() {
   if (DB.resumen) $("#generated").textContent = `${t("generated")} ${new Date(DB.resumen.generado).toLocaleDateString(locale())}`;
 }
 
-const flagTags = (flags) => (flags || []).map((f) => `<span class="tag" title="${esc(t("flagd_" + f))}">${esc(t("flag_" + f))}</span>`).join("");
+// Filtro por indicadores: lista separada por comas; "*" = cualquier indicador. Se exigen todos los elegidos.
+const selFlags = (v) => (v ? v.split(",").filter(Boolean) : []);
+const flagMatch = (flags, v) => { const sel = selFlags(v); return !sel.length || (sel.includes("*") ? flags.length > 0 : sel.every((f) => flags.includes(f))); };
+const toggleFlag = (v, f) => { const sel = selFlags(v).filter((x) => x !== "*"); const i = sel.indexOf(f); if (i >= 0) sel.splice(i, 1); else sel.push(f); return f === "*" ? (v === "*" ? "" : "*") : sel.join(","); };
+function chipBar(id, list, prefix, counts, cur) {
+  const sel = selFlags(cur);
+  return `<div class="chips" id="${id}" role="group" aria-label="${esc(t("all_flags"))}">
+    <button type="button" class="chip any" data-f="*" aria-pressed="${sel.includes("*")}">${esc(t("any_flag"))}</button>
+    ${list.filter((f) => counts[f]).map((f) => `<button type="button" class="chip" data-f="${f}" aria-pressed="${sel.includes(f)}" title="${esc(t(prefix + "d_" + f))}">${esc(t(prefix + "_" + f))} <span>${num(counts[f])}</span></button>`).join("")}
+    ${sel.length ? `<button type="button" class="chip clear" data-f="">${esc(t("clear_filters"))}</button>` : ""}
+    ${sel.filter((x) => x !== "*").length > 1 ? `<p class="sub chips-note">${esc(t("chips_all"))}</p>` : ""}
+  </div>`;
+}
+const flagTags = (flags) => (flags || []).map((f) => `<span class="tag" data-f="${f}" title="${esc(t("flagd_" + f))}">${esc(t("flag_" + f))}</span>`).join("");
 
 function bars(items, { value = "importe", label = "nombre", href, fmt = eurShort, limit = 10 } = {}) {
   const list = items.slice(0, limit);
@@ -151,7 +164,7 @@ function filteredConvs() {
     (!q || c._s.includes(q)) &&
     (!state.admin || c.nivel1 === state.admin) &&
     (!state.tipo || c.tipo === state.tipo) &&
-    (!state.flag || (state.flag === "*" ? c.flags.length : c.flags.includes(state.flag))) &&
+    flagMatch(c.flags, state.flag) &&
     c.importe >= min);
   const k = state.sort, d = state.dir;
   rows.sort((a, b) => (a[k] > b[k] ? d : a[k] < b[k] ? -d : 0));
@@ -167,9 +180,9 @@ function viewProjects() {
     <input type="search" id="q" placeholder="${esc(t("search_projects"))}" value="${esc(state.q)}">
     <select id="admin">${opt("", t("all_admins"), state.admin)}${admins.map((a) => opt(a, a, state.admin)).join("")}</select>
     <select id="tipo">${opt("", t("all_types"), state.tipo)}${tipos.map((a) => opt(a, a, state.tipo)).join("")}</select>
-    <select id="flag">${opt("", t("all_flags"), state.flag)}${opt("*", t("any_flag"), state.flag)}${FLAGS.map((f) => opt(f, t("flag_" + f), state.flag)).join("")}</select>
     <input type="number" id="min" min="0" step="10000" placeholder="${esc(t("min_amount"))}" value="${esc(state.min)}" style="width:170px">
   </div>
+  ${chipBar("chips", FLAGS, "flag", DB.resumen.indicadores, state.flag)}
   <div id="results"></div>`;
 }
 
@@ -199,8 +212,13 @@ function pager(pages, cur) {
 function bindProjects() {
   const upd = () => { state.page = 0; syncUrl(); renderProjectRows(); };
   $("#q").addEventListener("input", (e) => { state.q = e.target.value; upd(); });
-  ["admin", "tipo", "flag", "min"].forEach((id) => $("#" + id).addEventListener("input", (e) => { state[id] = e.target.value; upd(); }));
+  ["admin", "tipo", "min"].forEach((id) => $("#" + id).addEventListener("input", (e) => { state[id] = e.target.value; upd(); }));
+  const setFlag = (v) => { state.flag = v; $("#chips").outerHTML = chipBar("chips", FLAGS, "flag", DB.resumen.indicadores, v); bindChips(); upd(); };
+  const bindChips = () => $("#chips").addEventListener("click", (e) => { const b = e.target.closest("button[data-f]"); if (b) setFlag(b.dataset.f ? toggleFlag(state.flag, b.dataset.f) : ""); });
+  bindChips();
   $("#results").addEventListener("click", (e) => {
+    const tg = e.target.closest(".tag[data-f]");
+    if (tg) { if (!selFlags(state.flag).includes(tg.dataset.f)) setFlag(toggleFlag(state.flag, tg.dataset.f)); return; }
     const s = e.target.closest("th[data-sort]");
     if (s) { const k = s.dataset.sort; state.dir = state.sort === k ? -state.dir : -1; state.sort = k; renderProjectRows(); return; }
     const p = e.target.closest("button[data-p]");
@@ -355,7 +373,7 @@ function loadContratos() {
   }
   return CT.loading;
 }
-const cflagTags = (flags) => (flags || []).map((f) => `<span class="tag" title="${esc(t("cflagd_" + f))}">${esc(t("cflag_" + f))}</span>`).join("");
+const cflagTags = (flags) => (flags || []).map((f) => `<span class="tag" data-f="${f}" title="${esc(t("cflagd_" + f))}">${esc(t("cflag_" + f))}</span>`).join("");
 
 function viewContratos() {
   const d = CT.data;
@@ -376,8 +394,8 @@ function viewContratos() {
     <input type="search" id="cq" placeholder="${esc(t("search_contracts"))}" value="${esc(cstate.q)}">
     <select id="cambito">${opt("", t("all_admins"), cstate.ambito)}${ambitos.map((a) => opt(a, a, cstate.ambito)).join("")}</select>
     <select id="cproc">${opt("", t("all_types"), cstate.proc)}${procs.map((p) => opt(p, p, cstate.proc)).join("")}</select>
-    <select id="cflag">${opt("", t("all_flags"), cstate.flag)}${opt("*", t("any_flag"), cstate.flag)}${CFLAGS.map((f) => opt(f, t("cflag_" + f), cstate.flag)).join("")}</select>
   </div>
+  ${chipBar("cchips", CFLAGS, "cflag", I, cstate.flag)}
   <div id="cresults"></div>`;
 }
 
@@ -385,7 +403,7 @@ function renderContratos() {
   const q = norm(cstate.q);
   const rows = CT.data.contratos.filter((c) => (!q || c._s.includes(q)) && (!cstate.proc || c.proc === cstate.proc) &&
     (!cstate.ambito || c.ambito === cstate.ambito) &&
-    (!cstate.flag || (cstate.flag === "*" ? c.flags.length : c.flags.includes(cstate.flag))));
+    flagMatch(c.flags, cstate.flag));
   const k = cstate.sort, d = cstate.dir;
   rows.sort((a, b) => ((a[k] ?? 0) > (b[k] ?? 0) ? d : (a[k] ?? 0) < (b[k] ?? 0) ? -d : 0));
   const pages = Math.max(1, Math.ceil(rows.length / PAGE));
@@ -403,8 +421,13 @@ function bindContratos() {
   if (!CT.data) return;
   const upd = () => { cstate.page = 0; renderContratos(); };
   $("#cq").addEventListener("input", (e) => { cstate.q = e.target.value; upd(); });
-  [["cproc", "proc"], ["cflag", "flag"], ["cambito", "ambito"]].forEach(([id, k]) => $("#" + id).addEventListener("input", (e) => { cstate[k] = e.target.value; upd(); }));
+  const setFlag = (v) => { cstate.flag = v; $("#cchips").outerHTML = chipBar("cchips", CFLAGS, "cflag", CT.data.indicadores, v); bindChips(); upd(); };
+  const bindChips = () => $("#cchips").addEventListener("click", (e) => { const b = e.target.closest("button[data-f]"); if (b) setFlag(b.dataset.f ? toggleFlag(cstate.flag, b.dataset.f) : ""); });
+  bindChips();
+  [["cproc", "proc"], ["cambito", "ambito"]].forEach(([id, k]) => $("#" + id).addEventListener("input", (e) => { cstate[k] = e.target.value; upd(); }));
   $("#cresults").addEventListener("click", (e) => {
+    const tg = e.target.closest(".tag[data-f]");
+    if (tg) { if (!selFlags(cstate.flag).includes(tg.dataset.f)) setFlag(toggleFlag(cstate.flag, tg.dataset.f)); return; }
     const s = e.target.closest("th[data-sort]");
     if (s) { const key = s.dataset.sort; cstate.dir = cstate.sort === key ? -cstate.dir : -1; cstate.sort = key; renderContratos(); return; }
     const p = e.target.closest("button[data-p]");

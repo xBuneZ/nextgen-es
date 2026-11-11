@@ -204,3 +204,17 @@ dl.meta dd { margin: 0; }
   .hide-sm { display: none; }
   .prose { padding: 4px 20px 16px; }
 }
+
+/* Filtro por indicadores (etiquetas amarillas) */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+.chip { font: inherit; font-size: 13px; font-weight: 500; min-height: 36px; padding: 0 14px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); color: var(--text); display: inline-flex; align-items: center; gap: 6px; }
+.chip span { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.chip:hover { border-color: var(--c3); }
+.chip[aria-pressed="true"] { background: var(--c3); border-color: var(--c3); color: #14171F; }
+.chip[aria-pressed="true"] span { color: #3A3000; }
+.chip.any[aria-pressed="false"] { background: var(--warn-bg); color: var(--warn-fg); border-color: transparent; }
+.chip.clear { border-style: dashed; color: var(--muted); }
+.table-wrap .tag[data-f] { cursor: pointer; }
+.table-wrap .tag[data-f]:hover { outline: 1px solid var(--c3); }
+.chips-note { flex-basis: 100%; margin: 0; }
