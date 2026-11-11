@@ -12,9 +12,16 @@ const t = (k) => (I18N[lang] && I18N[lang][k]) || I18N.es[k] || k;
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const locale = () => (lang === "es" ? "es-ES" : "en-GB");
-const eur = (n) => new Intl.NumberFormat(locale(), { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n || 0);
-const eurShort = (n) => new Intl.NumberFormat(locale(), { style: "currency", currency: "EUR", notation: "compact", maximumFractionDigits: 1 }).format(n || 0);
-const num = (n) => new Intl.NumberFormat(locale()).format(n || 0);
+const eur = (n) => new Intl.NumberFormat(locale(), { style: "currency", currency: "EUR", maximumFractionDigits: 0, useGrouping: "always" }).format(n || 0);
+const eurShort = (n) => {
+  n = n || 0;
+  if (lang === "es") {
+    if (Math.abs(n) >= 1e6) return `${new Intl.NumberFormat("es-ES", { maximumFractionDigits: Math.abs(n) < 1e7 ? 1 : 0, useGrouping: "always" }).format(n / 1e6)} M€`;
+    return `${new Intl.NumberFormat("es-ES", { maximumFractionDigits: 0, useGrouping: "always" }).format(n)} €`;
+  }
+  return new Intl.NumberFormat("en-GB", { style: "currency", currency: "EUR", notation: "compact", maximumFractionDigits: 1 }).format(n);
+};
+const num = (n) => new Intl.NumberFormat(locale(), { useGrouping: "always" }).format(n || 0);
 const norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
 const DB = { resumen: null, convs: [], benef: [], convById: new Map() };
@@ -33,6 +40,7 @@ async function load() {
 function applyI18n() {
   document.documentElement.lang = lang;
   document.querySelectorAll("[data-i18n]").forEach((el) => (el.textContent = t(el.dataset.i18n)));
+  document.querySelectorAll("[data-i18n-ph]").forEach((el) => (el.placeholder = t(el.dataset.i18nPh)));
   $("#lang").textContent = lang === "es" ? "EN" : "ES";
   if (DB.resumen) $("#generated").textContent = `${t("generated")} ${new Date(DB.resumen.generado).toLocaleDateString(locale())}`;
 }
@@ -50,39 +58,91 @@ function bars(items, { value = "importe", label = "nombre", href, fmt = eurShort
 }
 
 // ---------- Vistas ----------
+const COLORS = ["var(--c1)", "var(--c2)", "var(--c3)"];
+const initials = (s) => (String(s).replace(/[,.]/g, " ").split(/\s+/).filter((w) => w.length > 2 && !/^(S\.?A|S\.?L|SLU|SAU|DEL?|LAS?|LOS|PARA|AND)$/i.test(w)).slice(0, 2).map((w) => w[0]).join("") || "?").toUpperCase();
+const isPublic = (b) => /^[PQS]/.test(b.nif || "");
+
+function card(title, sub, body, link) {
+  return `<section class="card">
+    <div class="card-head"><div><h2>${esc(title)}</h2>${sub ? `<p class="sub">${esc(sub)}</p>` : ""}</div>${link || ""}</div>${body}</section>`;
+}
+const btn = (href, label) => `<a class="btn-sm" href="${href}">${esc(label)}</a>`;
+
+function yearChart(years) {
+  const max = Math.max(...years.map((y) => y.importe), 1);
+  return `<div class="vbars" role="img" aria-label="${esc(t("by_year"))}">${years.map((y) => `
+    <div class="vbar"><span class="v">${(y.importe / 1e9).toLocaleString(locale(), { maximumFractionDigits: 1 })}</span>
+      <span class="b${y.importe === max ? " hi" : ""}" style="height:${Math.max(3, (110 * y.importe) / max)}px"></span>
+      <span class="x">${esc(y.nombre)}</span></div>`).join("")}</div>
+    <p class="sub">${esc(t("bn_note"))}</p>`;
+}
+
+function bubbles(items) {
+  const tot = items.reduce((s, i) => s + i.importe, 0) || 1;
+  const sh = items.map((i) => i.importe / tot);
+  const d = sh.map((s) => Math.max(54, Math.round(210 * Math.sqrt(s / sh[0]))));
+  const pos = [[0, 20], [d[0] - 24, 0], [d[0] - 6, (d[1] || 0) + 6]];
+  const bub = items.slice(0, 3).map((i, k) => `<div class="bubble b${k}" style="width:${d[k]}px;height:${d[k]}px;left:${pos[k][0]}px;top:${pos[k][1]}px;font-size:${Math.max(13, d[k] / 6)}px">${Math.round(sh[k] * 100)}%</div>`).join("");
+  const legend = items.slice(0, 3).map((i, k) => `<div><span class="lg"><i style="background:${COLORS[k]}"></i>${esc(t("tb_" + i.nombre))}</span><span class="lv">${eurShort(i.importe)}</span></div>`).join("");
+  return `<div class="bubbles" role="img" aria-label="${esc(items.map((i, k) => t("tb_" + i.nombre) + " " + Math.round(sh[k] * 100) + "%").join(", "))}">${bub}</div><div class="legend">${legend}</div>`;
+}
+
+function gauge(part, total) {
+  const p = total ? part / total : 0, a = Math.PI * p;
+  const x = (130 - 110 * Math.cos(a)).toFixed(1), y = (135 - 110 * Math.sin(a)).toFixed(1);
+  return `<div class="gauge"><svg viewBox="0 0 260 150" role="img" aria-label="${Math.round(p * 100)}%">
+    <path d="M20 135 A110 110 0 0 1 240 135" class="g-bg"></path>
+    <path d="M20 135 A110 110 0 0 1 ${x} ${y}" class="g-fg"></path>
+    <circle cx="${x}" cy="${y}" r="9" class="g-dot"></circle></svg>
+    <div class="g-txt"><b>${num(part)}</b><span>${t("of")} ${num(total)} ${t("k_convs")}</span></div></div>`;
+}
+
 function viewHome() {
   const r = DB.resumen, T = r.totales;
-  const flagged = DB.convs.filter((c) => c.flags.length).length;
-  const ind = FLAGS.map((f) => ({ nombre: t("flag_" + f), f, n: r.indicadores[f] || 0 })).filter((x) => x.n);
+  const noComp = DB.convs.filter((c) => c.flags.includes("concesion_directa") || c.flags.includes("nominativa")).length;
+  const grant = (r.por_instrumento || []).find((i) => i.nombre === "subvencion");
+  const tiles = ["sin_concesiones", "beneficiario_unico_1m", "nominativa", "supera_presupuesto"].map((f, k) => {
+    const n = r.indicadores[f] || 0;
+    return `<a class="tile t${k}" href="#/proyectos?flag=${f}"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4h11l-2 4 2 4H5"></path></svg></span>
+      <b>${esc(t("flag_" + f))}</b><span class="sub">${num(n)} ${t("k_convs")}</span>
+      <span class="prog"><span style="width:${Math.max(2, (100 * n) / T.convocatorias)}%"></span></span></a>`;
+  }).join("");
+  const benef = DB.benef.slice(0, 5).map((b) => `<a class="row" href="#/beneficiario/${encodeURIComponent(b.nif || b.nombre)}">
+      <span class="av ${isPublic(b) ? "pub" : ""}">${esc(initials(b.nombre))}</span>
+      <span class="rt"><b>${esc(b.nombre)}</b><span class="sub">${t(isPublic(b) ? "kind_pub" : "kind_priv")}</span></span>
+      <span class="ra">${eurShort(b.importe)}</span></a>`).join("");
+  const cases = DB.convs.filter((c) => c.flags.includes("beneficiario_unico_1m") && c.top[0] && !/^[PQS]/.test(c.top[0].nif || "")).slice(0, 4).map((c) => `
+    <a class="case" href="#/proyecto/${c.id}"><span class="ct"><b>${esc(c.top[0].nombre)}</b><b>${eurShort(c.importe)}</b></span>
+      <span class="sub">${esc(c.titulo.slice(0, 90))}${c.titulo.length > 90 ? "…" : ""}</span>
+      <span class="sub">${esc(c.nivel2)} · ${esc(c.fecha.slice(0, 4))}</span>${flagTags(c.flags)}</a>`).join("");
+  const fines = r.por_finalidad.slice(0, 6);
+  const fmax = fines[0] ? fines[0].importe : 1;
+
   return `
-  <h1>${esc(t("home_title"))}</h1>
-  <p class="lead">${esc(t("home_lead"))}</p>
-  <div class="kpis">
-    <div class="kpi"><b>${eurShort(T.importe)}</b><span>${t("k_importe")}</span></div>
-    <div class="kpi"><b>${eurShort(T.presupuesto)}</b><span>${t("k_presupuesto")}</span></div>
-    <div class="kpi"><b>${num(T.convocatorias)}</b><span>${t("k_convs")}</span></div>
-    <div class="kpi"><b>${num(T.concesiones)}</b><span>${t("k_concesiones")}</span></div>
-    <div class="kpi"><b>${num(flagged)}</b><span>${t("k_flagged")}</span></div>
+  <div class="hero"><h1>${esc(t("home_title"))}</h1>
+    <p class="lead">${num(T.convocatorias)} ${t("k_convs")} · ${num(T.concesiones)} ${t("k_concesiones")} · BDNS</p></div>
+  <div class="cols">
+    <div class="col">
+      ${card(t("k_importe_t"), t("by_year"), `<p class="big">${eurShort(T.importe)}</p>
+        <p class="delta">${grant ? Math.round((100 * grant.importe) / T.importe) : 0}% ${t("grant_share")}</p>${yearChart(r.por_anio)}`, btn("#/proyectos", t("see_projects")))}
+      ${card(t("exec_t"), t("exec_sub"), `<p class="big">${eurShort(T.importe)} <small>${t("of")} ${eurShort(T.presupuesto)}</small></p>
+        <div class="seg">${Array.from({ length: 10 }, (_, i) => `<span class="${i < Math.round((10 * T.importe) / T.presupuesto) ? "on" : ""}"></span>`).join("")}</div>`)}
+      <h2 class="list-h">${t("top_benef")}</h2>
+      <div class="rows">${benef}</div>
+      <a class="more" href="#/beneficiarios">${t("see_all")}</a>
+    </div>
+    <div class="col">
+      ${card(t("who_t"), t("who_sub"), bubbles(r.por_tipo_beneficiario || []))}
+      ${card(t("what_t"), t("what_sub"), `<div class="hbars">${fines.map((f, k) => `<a href="#/proyectos?q=${encodeURIComponent(f.nombre)}"><span class="hl"><span>${esc(f.nombre)}</span><span class="sub">${eurShort(f.importe)}</span></span>
+        <span class="track"><span style="width:${(100 * f.importe) / fmax}%;background:${COLORS[k % 3]}"></span></span></a>`).join("")}</div>`)}
+    </div>
+    <div class="col">
+      ${card(t("nocomp_t"), t("nocomp_sub"), gauge(noComp, T.convocatorias), btn("#/proyectos?flag=concesion_directa", t("see")))}
+      <div class="tiles">${tiles}</div>
+      ${card(t("cases_t"), "", `<div class="cases">${cases}</div>`)}
+    </div>
   </div>
-  <div class="grid2">
-    <section class="card"><h2>${t("top_projects")}</h2>
-      ${bars(DB.convs, { label: "titulo", href: (i) => `#/proyecto/${i.id}` })}
-      <a href="#/proyectos">${t("see_all")}</a></section>
-    <section class="card"><h2>${t("top_benef")}</h2>
-      ${bars(DB.benef, { href: (i) => `#/beneficiario/${encodeURIComponent(i.nif || i.nombre)}` })}
-      <a href="#/beneficiarios">${t("see_all")}</a></section>
-    <section class="card"><h2>${t("by_org")}</h2>${bars(r.por_organo, { href: (i) => `#/proyectos?q=${encodeURIComponent(i.nombre)}` })}</section>
-    <section class="card"><h2>${t("by_admin")}</h2>${bars(r.por_administracion, { href: (i) => `#/proyectos?admin=${encodeURIComponent(i.nombre)}` })}
-      <h2>${t("by_year")}</h2>${bars(r.por_anio, { limit: 20 })}</section>
-    <section class="card"><h2>${t("by_instr")}</h2>
-      ${bars((r.por_instrumento || []).map((i) => ({ ...i, nombre: t("ins_" + i.nombre) })))}
-      <h2>${t("by_tb")}</h2>
-      ${bars((r.por_tipo_beneficiario || []).map((i) => ({ ...i, nombre: t("tb_" + i.nombre) })))}
-      <p class="muted" style="font-size:13px">${esc(t("double_note"))}</p></section>
-    <section class="card"><h2>${t("flags_title")}</h2>
-      ${bars(ind, { value: "n", fmt: num, href: (i) => `#/proyectos?flag=${i.f}` })}
-      <p class="muted" style="font-size:13px">${esc(t("foot_disclaimer"))} <a href="#/metodologia">${t("nav_method")}</a></p></section>
-  </div>`;
+  `;
 }
 
 function filteredConvs() {
@@ -316,6 +376,11 @@ $("#lang").addEventListener("click", () => {
   applyI18n(); delete $("#app").dataset.view; route();
 });
 window.addEventListener("hashchange", route);
+$("#hsearch").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const q = $("#hq").value.trim();
+  location.hash = `#/proyectos${q ? "?q=" + encodeURIComponent(q) : ""}`;
+});
 
 load().then(() => { applyI18n(); route(); }).catch((e) => {
   $("#app").innerHTML = `<p class="notice">Error: ${esc(e.message)}</p>`;

@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Next Gen España — ¿En qué se gastan los fondos?</title>
   <meta name="description" content="Buscador ciudadano de las ayudas financiadas en España con los fondos europeos Next Generation EU (MRR), con datos oficiales de la BDNS.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -18,6 +20,10 @@
         <a href="#/metodologia" data-i18n="nav_method">Metodología</a>
         <a href="#/denunciar" data-i18n="nav_report">Denunciar</a>
       </nav>
+      <form id="hsearch" class="hsearch" role="search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+        <input type="search" id="hq" aria-label="Buscar" data-i18n-ph="search_ph" placeholder="Buscar proyecto o empresa…">
+      </form>
       <button id="lang" class="lang" type="button" aria-label="Language">EN</button>
     </div>
   </header>
