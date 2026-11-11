@@ -37,4 +37,4 @@ jobs:
       - name: Publicar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: etl/publicar_datos.sh "Subvenciones: BDNS $(date -u +%F)" resumen.json convocatorias.json convocatorias beneficiarios.json
+        run: etl/publicar_datos.sh "Subvenciones BDNS $(date -u +%F)" resumen.json convocatorias.json convocatorias beneficiarios.json
