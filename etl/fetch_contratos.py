@@ -133,6 +133,15 @@ def parse_entry(entry) -> dict | None:
         p = find(p, "ParentLocatedParty")
 
     proc = find(cfs, "TenderingProcess")
+    # Fecha de la primera publicación del anuncio de licitación y si salió en el DOUE
+    pubs, doue = [], False
+    for vni in findall(cfs, "ValidNoticeInfo"):
+        if txt(vni, "NoticeTypeCode") != "DOC_CN":
+            continue
+        for aps in findall(vni, "AdditionalPublicationStatus"):
+            if txt(aps, "PublicationMediaName").upper() == "DOUE":
+                doue = True
+            pubs += [d for d in (txt(r, "IssueDate") for r in findall(aps, "AdditionalPublicationDocumentReference")) if d]
     lotes = []
     for tr in findall(cfs, "TenderResult"):
         w = find(tr, "WinningParty")
@@ -163,6 +172,9 @@ def parse_entry(entry) -> dict | None:
         "sup": [x for x in sup[::-1] if x.lower() != "sector público"],
         "proc": PROCEDIMIENTOS.get(txt(proc, "ProcedureCode") if proc is not None else "", ""),
         "urg": txt(proc, "UrgencyCode") if proc is not None else "",
+        "pub": min(pubs)[:10] if pubs else "",
+        "plazo_fin": txt(proc, "TenderSubmissionDeadlinePeriod", "EndDate")[:10] if proc is not None else "",
+        "doue": doue,
         "fcode": "PRTR" if "PRTR" in fcodes else (fcodes[0] if fcodes else ""),
         "lotes": lotes,
     }
@@ -257,6 +269,21 @@ def build() -> None:
     flags_count = defaultdict(int)
     tot = {"contratos": 0, "adjudicados": 0, "importe": 0.0, "presupuesto": 0.0}
 
+    # Ganador recurrente sin competencia: misma empresa, mismo órgano, >=3 contratos
+    # con un solo licitador o negociados sin publicidad.
+    nocomp = defaultdict(set)
+    for r in recs:
+        for l in r["lotes"]:
+            if l.get("adj") and (l.get("ofertas") == 1 or r["proc"] == "Negociado sin publicidad"):
+                nocomp[(r["organo"], (l.get("nif") or l["adj"]).upper())].add(r["id"])
+    recurrentes = {k: len(v) for k, v in nocomp.items() if len(v) >= 3}
+
+    def plazo_dias(r):
+        try:
+            return (dt.date.fromisoformat(r.get("plazo_fin", "")) - dt.date.fromisoformat(r.get("pub", ""))).days
+        except ValueError:
+            return None
+
     for r in recs:
         lotes = [l for l in r["lotes"] if l.get("importe") and l.get("adj")]
         importe = sum(l["importe"] for l in lotes)
@@ -273,6 +300,13 @@ def build() -> None:
         if lotes and r.get("presupuesto") and len(lotes) == 1 and lotes[0].get("ofertas") == 1 \
                 and importe >= r["presupuesto"] * 0.995:
             flags.append("sin_baja")
+        plazo = plazo_dias(r)
+        if plazo is not None and 0 <= plazo < 20 and (r.get("presupuesto") or 0) >= 1_000_000 \
+                and r["proc"] not in ("Negociado sin publicidad", "Derivado de acuerdo marco", "Contrato menor"):
+            flags.append("plazo_corto")
+        rec_n = max((recurrentes.get((r["organo"], (l.get("nif") or l["adj"]).upper()), 0) for l in lotes), default=0)
+        if rec_n:
+            flags.append("ganador_recurrente")
         for fl in flags:
             flags_count[fl] += 1
 
@@ -306,6 +340,7 @@ def build() -> None:
             "fecha": max((l["fecha"] for l in lotes if l.get("fecha")), default=""),
             "ofertas": min((l["ofertas"] for l in lotes if l.get("ofertas")), default=None),
             "n_lotes": len(lotes),
+            "pub": r.get("pub", ""), "plazo": plazo, "doue": r.get("doue", False), "recurrente": rec_n or None,
             "adj": sorted(({**v, "importe": round(v["importe"], 2)} for v in adjs.values()), key=lambda x: -x["importe"])[:10],
             "flags": flags,
         })

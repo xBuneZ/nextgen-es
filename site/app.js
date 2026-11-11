@@ -341,7 +341,7 @@ function viewReport() {
 
 
 // ---------- Contratos públicos (PLACSP) ----------
-const CFLAGS = ["licitador_unico", "sin_baja", "negociado_sin_publicidad", "emergencia", "supera_presupuesto"];
+const CFLAGS = ["licitador_unico", "sin_baja", "ganador_recurrente", "plazo_corto", "negociado_sin_publicidad", "emergencia", "supera_presupuesto"];
 const CT = { data: null, loading: null };
 const cstate = { q: "", proc: "", flag: "", ambito: "", page: 0, sort: "importe", dir: -1 };
 
@@ -425,7 +425,11 @@ function showContrato(i) {
     <div class="kpis"><div class="kpi"><b>${eur(c.importe)}</b><span>${t("c_awarded")} (${t("no_vat")})</span></div>
       <div class="kpi"><b>${eur(c.presupuesto)}</b><span>${t("c_budget")}</span></div>
       <div class="kpi"><b>${c.ofertas ?? "—"}</b><span>${t("c_offers")}</span></div></div>
-    <dl class="meta">${row("m_type", esc(c.proc))}${row("c_ctype", esc(c.tipo))}${row("m_regions", esc(c.lugar))}${row("c_date", esc(c.fecha))}
+    <dl class="meta">${row("m_type", esc(c.proc))}${row("c_ctype", esc(c.tipo))}${row("m_regions", esc(c.lugar))}
+      ${row("c_pub", c.pub ? esc(c.pub) + (c.doue ? " · " + t("c_doue") : "") : "")}
+      ${row("c_deadline", c.plazo != null ? `${num(c.plazo)} ${t("c_days")}` : "")}
+      ${row("c_date", esc(c.fecha))}
+      ${row("c_recurrent", c.recurrente ? `${num(c.recurrente)} ${t("c_recurrent_n")}` : "")}
       ${row("m_official_c", `<a href="${esc(c.url)}" target="_blank" rel="noopener">contrataciondelestado.es ↗</a>`)}</dl>
     <h2>${t("c_winners")}</h2>
     ${c.adj.length ? `<div class="table-wrap"><table><tbody>${c.adj.map((a) => `<tr><td>${esc(a.nombre)}<div class="t-sub">${esc(a.nif || "")}</div></td><td class="num">${eur(a.importe)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">${t("none")}</p>`}`);

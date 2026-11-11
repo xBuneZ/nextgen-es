@@ -39,5 +39,7 @@ Un contrato se incluye si su código de financiación (`FundingProgramCode`) es 
 | `negociado_sin_publicidad` | Procedimiento negociado sin publicidad |
 | `emergencia` | Tramitación de emergencia |
 | `supera_presupuesto` | Adjudicado > 110% del presupuesto de licitación |
+| `plazo_corto` | Presupuesto ≥1 M€ y menos de 20 días naturales entre la primera publicación del anuncio de licitación y el fin del plazo de ofertas (excluye negociados y derivados de acuerdo marco). El mínimo legal general para contratos armonizados es de 35 días; con urgencia puede reducirse |
+| `ganador_recurrente` | La misma empresa (NIF) gana ≥3 contratos del mismo órgano con un solo licitador o por negociado sin publicidad |
 
 Importes sin IVA.
