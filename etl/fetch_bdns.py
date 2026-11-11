@@ -131,7 +131,7 @@ def r2(x: float) -> float:
     return round(float(x or 0), 2)
 
 
-def build(records: list[dict]) -> None:
+def build(records: list[dict], force: bool = False) -> None:
     today = dt.date.today()
     convs_out = []
     benef = {}  # key -> dict
@@ -142,6 +142,10 @@ def build(records: list[dict]) -> None:
     flags_count = defaultdict(int)
     by_instr = defaultdict(lambda: {"n": 0, "importe": 0.0})
     by_tipo_benef = defaultdict(lambda: {"n": 0, "importe": 0.0})
+    # Desglose sin doble cómputo: lo que llega a empresas, entidades y personas como
+    # subvención a fondo perdido, separado de las transferencias a administraciones
+    # (que a menudo lo vuelven a repartir en sus propias convocatorias) y de avales y préstamos.
+    desglose = defaultdict(float)
     tot = {"convocatorias": 0, "concesiones": 0, "importe": 0.0,
            "personas_fisicas_n": 0, "personas_fisicas_importe": 0.0, "presupuesto": 0.0}
 
@@ -169,6 +173,12 @@ def build(records: list[dict]) -> None:
             tb = "pf" if is_pf else ("publico" if nif and nif[0] in "PQS" else "privado")
             by_tipo_benef[tb]["n"] += 1
             by_tipo_benef[tb]["importe"] += imp
+            if tb == "publico":
+                desglose["a_administraciones"] += imp
+            elif ins == "subvencion":
+                desglose["fondo_perdido_" + tb] += imp
+            else:
+                desglose[ins if ins in ("garantia", "prestamo") else "otros"] += imp
             if is_pf:
                 pf_n += 1
                 pf_imp += imp
@@ -272,7 +282,19 @@ def build(records: list[dict]) -> None:
         "indicadores": dict(flags_count),
         "por_instrumento": ranked(by_instr),
         "por_tipo_beneficiario": ranked(by_tipo_benef),
+        "desglose": {k: r2(v) for k, v in desglose.items()},
     }
+
+    # No publicar datos que han encogido de forma anormal (descarga incompleta o fallo de la fuente)
+    prev = OUT / "resumen.json"
+    if prev.exists():
+        antes = json.loads(prev.read_text())["totales"]
+        caidas = [k for k in ("convocatorias", "concesiones") if tot[k] < antes.get(k, 0) * 0.95]
+        if caidas:
+            msg = "Datos incompletos, NO se publican: " + ", ".join(f"{k} cae de {antes[k]} a {tot[k]}" for k in caidas)
+            if not force:
+                sys.exit(msg + ". Usa --force para publicar igualmente.")
+            print("AVISO (se fuerza la publicación): " + msg, file=sys.stderr)
 
     OUT.mkdir(parents=True, exist_ok=True)
     dump = lambda name, obj: (OUT / name).write_text(json.dumps(obj, ensure_ascii=False, separators=(",", ":")))
@@ -301,13 +323,14 @@ def main() -> None:
     ap.add_argument("--workers", type=int, default=6)
     ap.add_argument("--refresh", action="store_true", help="ignora la caché local")
     ap.add_argument("--build-only", action="store_true", help="regenera los JSON desde la caché")
+    ap.add_argument("--force", action="store_true", help="publica aunque los datos caigan más de un 5 %%")
     ap.add_argument("--refresh-days", type=int, default=120,
                     help="re-descarga convocatorias publicadas en los últimos N días")
     args = ap.parse_args()
     CACHE.mkdir(parents=True, exist_ok=True)
 
     if args.build_only:
-        build([json.loads(f.read_text()) for f in sorted(CACHE.glob("*.json"))])
+        build([json.loads(f.read_text()) for f in sorted(CACHE.glob("*.json"))], args.force)
         return
     print("Listando convocatorias MRR…", file=sys.stderr)
     convs = list_convocatorias(args.limit)
@@ -327,7 +350,7 @@ def main() -> None:
 
     if errors > len(convs) * 0.05:
         sys.exit(f"Demasiados errores ({errors}); no se sobrescriben los datos.")
-    build(records)
+    build(records, args.force)
 
 
 if __name__ == "__main__":

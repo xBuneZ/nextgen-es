@@ -21,6 +21,7 @@ Uso:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import datetime as dt
 import json
 import re
@@ -34,7 +35,18 @@ from collections import defaultdict
 from pathlib import Path
 from xml.etree.ElementTree import iterparse
 
-BASE = "https://contrataciondelsectorpublico.gob.es/sindicacion/sindicacion_643/licitacionesPerfilesContratanteCompleto3_{}.zip"
+# Dos conjuntos de datos de la Plataforma de Contratación del Sector Público:
+#  - placsp: órganos que publican en la propia Plataforma (Estado, muchas CCAA y entidades locales).
+#  - agr: «plataformas agregadas», las CCAA con plataforma propia (Cataluña, Andalucía,
+#    País Vasco, Madrid, Galicia, Navarra, La Rioja…), que la Plataforma republica aparte.
+FUENTES = {
+    "placsp": ("", "https://contrataciondelsectorpublico.gob.es/sindicacion/sindicacion_643/licitacionesPerfilesContratanteCompleto3_{}.zip"),
+    "agr": ("agr-", "https://contrataciondelsectorpublico.gob.es/sindicacion/sindicacion_1044/PlataformasAgregadasSinMenores_{}.zip"),
+}
+REGION_HOST = [("contractaciopublica.cat", "Cataluña"), ("gencat.cat", "Cataluña"), ("juntadeandalucia.es", "Andalucía"),
+               ("euskadi.eus", "País Vasco"), ("euskadi.net", "País Vasco"), ("comunidad.madrid", "Comunidad de Madrid"), ("madrid.org", "Comunidad de Madrid"),
+               ("contratosdegalicia.gal", "Galicia"), ("xunta.gal", "Galicia"), ("xunta.es", "Galicia"), ("navarra.es", "Navarra"), ("larioja.org", "La Rioja"),
+               ("gobiernodecanarias.org", "Canarias"), ("carm.es", "Región de Murcia"), ("jcyl.es", "Castilla y León")]
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / "etl" / ".cache" / "contratos"
 OUT = ROOT / "site" / "data"
@@ -203,14 +215,15 @@ def download(url: str, dest: Path, retries: int = 4) -> bool:
     return False
 
 
-def process_period(period: str, keep: bool) -> int:
-    out = CACHE / f"{period}.jsonl"
+def process_period(period: str, keep: bool, fuente: str = "placsp") -> int:
+    pref, base = FUENTES[fuente]
+    out = CACHE / f"{pref}{period}.jsonl"
     if out.exists():
         return -1
-    zpath = CACHE / f"{period}.zip"
+    zpath = CACHE / f"{pref}{period}.zip"
     if not zpath.exists():
-        print(f"  descargando {period}…", file=sys.stderr)
-        if not download(BASE.format(period), zpath):
+        print(f"  descargando {pref}{period}…", file=sys.stderr)
+        if not download(base.format(period), zpath):
             zpath.unlink(missing_ok=True)
             print(f"  {period}: no disponible", file=sys.stderr)
             return 0
@@ -226,6 +239,7 @@ def process_period(period: str, keep: bool) -> int:
                     if t == "entry":
                         rec = parse_entry(el)
                         if rec:
+                            rec["fuente"] = fuente
                             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
                             n += 1
                         el.clear()
@@ -235,7 +249,7 @@ def process_period(period: str, keep: bool) -> int:
     tmp.rename(out)
     if not keep:
         zpath.unlink(missing_ok=True)
-    print(f"  {period}: {n} registros PRTR", file=sys.stderr)
+    print(f"  {pref}{period}: {n} registros PRTR", file=sys.stderr)
     return n
 
 
@@ -253,7 +267,35 @@ def default_periods() -> list[str]:
     return month_range("202101", f"{today.year}{today.month:02d}")
 
 
-def build() -> None:
+def comprobar(fuentes: list[str], n_contratos: int, force: bool) -> None:
+    """Evita publicar datos incompletos: todos los meses cerrados deben estar procesados
+    y el número de contratos no puede caer más de un 5 % respecto a lo publicado."""
+    errores = []
+    hoy = dt.date.today()
+    ultimo = (hoy.replace(day=1) - dt.timedelta(days=1)).strftime("%Y%m")
+    for f in fuentes:
+        pref = FUENTES[f][0]
+        falta = [m for m in month_range("202101", ultimo) if not (CACHE / f"{pref}{m}.jsonl").exists()]
+        if falta:
+            errores.append(f"faltan {len(falta)} meses de «{f}»: {', '.join(falta[:8])}{'…' if len(falta) > 8 else ''}")
+    prev = DIR / "indice.json"
+    if prev.exists():
+        antes = json.loads(prev.read_text())["totales"]["contratos"]
+        if n_contratos < antes * 0.95:
+            errores.append(f"el número de contratos cae de {antes} a {n_contratos} (más de un 5 %)")
+    if errores:
+        msg = "Datos incompletos, NO se publican:\n  - " + "\n  - ".join(errores)
+        if force:
+            print("AVISO (se fuerza la publicación): " + msg, file=sys.stderr)
+        else:
+            sys.exit(msg + "\nUsa --force para publicar igualmente.")
+
+
+def region_de(url: str) -> str:
+    return next((r for h, r in REGION_HOST if h in (url or "")), "Otra plataforma autonómica")
+
+
+def build(fuentes: list[str] | None = None, force: bool = False) -> None:
     latest: dict[str, dict] = {}
     for f in sorted(CACHE.glob("*.jsonl")):
         for line in open(f):
@@ -262,6 +304,7 @@ def build() -> None:
             if prev is None or (r.get("upd") or "") >= (prev.get("upd") or ""):
                 latest[r["id"]] = r
     recs = [r for r in latest.values() if not r.get("deleted")]
+    comprobar(fuentes or list(FUENTES), len(recs), force)
 
     contratos = []
     by_adj = {}
@@ -332,7 +375,11 @@ def build() -> None:
             tot["adjudicados"] += 1
             tot["importe"] += importe
         org = r["organo"] or "?"
-        ambito = r["sup"][0] if r["sup"] else ""
+        if r.get("fuente") == "agr":
+            ambito = "PLATAFORMAS AUTONÓMICAS PROPIAS"
+            r["sup"] = [ambito, region_de(r.get("url"))] + [x for x in r["sup"] if x]
+        else:
+            ambito = r["sup"][0] if r["sup"] else ""
         by_org[org]["n"] += 1
         by_org[org]["importe"] += importe
         by_proc[r["proc"] or "?"]["n"] += 1
@@ -393,7 +440,10 @@ def cid_de(c: dict) -> str:
     if c.get("cid"):
         return c["cid"]
     m = re.search(r"idEvl=([^&]+)", c.get("url") or "")
-    return urllib.parse.unquote(m.group(1)) if m else (c.get("exp") or "") + "|" + (c.get("organo") or "")
+    if m:
+        return urllib.parse.unquote(m.group(1))
+    base = c.get("url") or (c.get("exp") or "") + "|" + (c.get("organo") or "")
+    return "a" + hashlib.sha1(base.encode()).hexdigest()[:16]
 
 
 def trozo(cid: str) -> int:
@@ -424,7 +474,8 @@ def write_split(out: dict) -> None:
     for c in out["contratos"]:
         cid = cid_de(c)
         c = {**c, "cid": cid}
-        c.pop("url", None)  # se reconstruye a partir del cid
+        if "idEvl=" in (c.get("url") or ""):
+            c.pop("url", None)  # se reconstruye a partir del cid
         cols["id"].append(cid)
         cols["exp"].append(c.get("exp") or "")
         textos.append(re.sub(r"\s+", " ", c.get("objeto") or "").strip()[:100])
@@ -442,7 +493,8 @@ def write_split(out: dict) -> None:
     meta = {k: out[k] for k in ("generado", "fuente", "totales", "indicadores", "por_procedimiento")}
     dump = lambda path, obj: path.write_text(json.dumps(obj, ensure_ascii=False, separators=(",", ":")))
     dump(DIR / "indice.json", {**meta, "n_trozos": N_TROZOS, "dic": dic, "cols": cols})
-    dump(DIR / "textos.json", textos)  # objeto de cada contrato (mismo orden); solo lo carga el listado
+    dump(DIR / "textos.json", textos)
+    dump(DIR / "totales.json", meta)  # pequeño: lo usa la portada sin cargar el índice  # objeto de cada contrato (mismo orden); solo lo carga el listado
     for i, t in enumerate(trozos):
         dump(DIR / "det" / f"{i:02d}.json", t)
     (OUT / "contratos.json").unlink(missing_ok=True)  # formato antiguo, de un solo fichero
@@ -454,6 +506,8 @@ def main() -> None:
     ap.add_argument("--keep-zips", action="store_true")
     ap.add_argument("--refresh-last", type=int, default=2, help="re-procesa los N últimos periodos")
     ap.add_argument("--build-only", action="store_true")
+    ap.add_argument("--fuentes", nargs="*", default=list(FUENTES), choices=list(FUENTES), help="conjuntos de datos a procesar")
+    ap.add_argument("--force", action="store_true", help="publica aunque falten meses o caigan los datos")
     ap.add_argument("--split-from", help="convierte un contratos.json antiguo al formato en trozos y sale")
     ap.add_argument("--no-build", action="store_true", help="solo descarga y extrae (para trabajos en paralelo)")
     ap.add_argument("--list-months", nargs=2, metavar=("DESDE", "HASTA"), help="imprime los meses como JSON y sale")
@@ -467,12 +521,13 @@ def main() -> None:
     CACHE.mkdir(parents=True, exist_ok=True)
     if not args.build_only:
         periods = args.periods or default_periods()
-        for p in periods[-args.refresh_last:] if args.refresh_last else []:
-            (CACHE / f"{p}.jsonl").unlink(missing_ok=True)
-        for p in periods:
-            process_period(p, args.keep_zips)
+        for f in args.fuentes:
+            for p in periods[-args.refresh_last:] if args.refresh_last else []:
+                (CACHE / f"{FUENTES[f][0]}{p}.jsonl").unlink(missing_ok=True)
+            for p in periods:
+                process_period(p, args.keep_zips, f)
     if not args.no_build:
-        build()
+        build(list(FUENTES), args.force)
 
 
 if __name__ == "__main__":

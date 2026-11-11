@@ -64,3 +64,24 @@ Cada ficha genera un texto de solicitud de acceso a la información (Ley 19/2013
 # Bot de redes sociales
 
 `etl/bot.py` publica, después de cada actualización semanal de contratos, hasta 4 contratos adjudicados en los últimos 14 días, de 300.000 € o más, con alguno de estos indicadores: precio máximo sin competencia, negociado sin publicidad, plazo corto, ganador recurrente, un solo licitador o emergencia. Cada mensaje se limita a hechos de los datos oficiales y enlaza a la ficha. Los ya publicados se guardan en `etl/bot_estado.json` para no repetirlos.
+
+# Cifra principal sin doble cómputo
+
+La portada destaca las **subvenciones a fondo perdido a empresas, entidades y personas**: concesiones con instrumento de subvención cuyo beneficiario no es una administración (NIF que no empieza por P, Q o S). Aparte se muestran:
+
+- lo **transferido a administraciones públicas**, que a menudo lo vuelven a conceder en sus propias convocatorias (sumarlo contaría dos veces el mismo dinero);
+- los **avales y préstamos**, que se devuelven;
+- el **total bruto** publicado en la BDNS.
+
+# Contratos de plataformas autonómicas
+
+Además de la Plataforma de Contratación del Sector Público, se procesa su conjunto de **plataformas agregadas** (`PlataformasAgregadasSinMenores`). Ahí publican las comunidades con plataforma propia: Cataluña, Andalucía, País Vasco, Madrid, Galicia, Navarra, La Rioja… La región se deduce del dominio del enlace al expediente.
+
+# Protección frente a datos incompletos
+
+Los procesos de actualización **no publican** si:
+
+- **Contratos:** falta algún mes cerrado desde enero de 2021 en cualquiera de las dos fuentes, o el número de contratos cae más de un 5 % respecto a lo publicado.
+- **Subvenciones:** el número de convocatorias o de concesiones cae más de un 5 %.
+
+En esos casos el workflow falla y los datos anteriores siguen publicados. Se puede forzar con `--force` tras revisarlo.

@@ -111,7 +111,34 @@ function gauge(part, total) {
     <div class="g-txt"><b>${num(part)}</b><span>${t("of")} ${num(total)} ${t("k_convs")}</span></div></div>`;
 }
 
+function moneyCard(r, grant) {
+  const T = r.totales, d = r.desglose;
+  if (!d) {
+    return card(t("k_importe_t"), t("by_year"), `<p class="big">${eurShort(T.importe)}</p>
+      <p class="delta">${grant ? Math.round((100 * grant.importe) / T.importe) : 0}% ${t("grant_share")}</p>${yearChart(r.por_anio)}`, btn("#/proyectos", t("see_projects")));
+  }
+  const fp = (d.fondo_perdido_privado || 0) + (d.fondo_perdido_pf || 0);
+  return card(t("k_importe_t"), t("money_sub"), `<p class="big">${eurShort(fp)}</p>
+    <p class="delta">${t("money_fp")}</p>
+    <ul class="brk">
+      <li><span>${t("money_admin")}<small>${t("money_admin_note")}</small></span><b>${eurShort(d.a_administraciones || 0)}</b></li>
+      <li><span>${t("money_loans")}</span><b>${eurShort((d.garantia || 0) + (d.prestamo || 0))}</b></li>
+      <li class="tot"><span>${t("money_gross")}</span><b>${eurShort(T.importe)}</b></li>
+    </ul>
+    <h3 class="mini">${t("money_years")}</h3>${yearChart(r.por_anio)}`, btn("#/proyectos", t("see_projects")));
+}
+
+function fillHome() {
+  const el = $("#cov-contr");
+  if (!el) return;
+  fetch("data/contratos/totales.json").then((r) => (r.ok ? r.json() : null)).then((d) => {
+    if (!$("#cov-contr")) return;
+    $("#cov-contr").textContent = d ? `${num(d.totales.adjudicados)} ${t("c_awarded_n")} · ${eurShort(d.totales.importe)} ${t("no_vat")}` : "—";
+  }).catch(() => { el.textContent = "—"; });
+}
+
 function viewHome() {
+  queueMicrotask(fillHome);
   const r = DB.resumen, T = r.totales;
   const noComp = DB.convs.filter((c) => c.flags.includes("concesion_directa") || c.flags.includes("nominativa")).length;
   const grant = (r.por_instrumento || []).find((i) => i.nombre === "subvencion");
@@ -137,8 +164,7 @@ function viewHome() {
     <p class="lead">${num(T.convocatorias)} ${t("k_convs")} · ${num(T.concesiones)} ${t("k_concesiones")} · BDNS</p></div>
   <div class="cols">
     <div class="col">
-      ${card(t("k_importe_t"), t("by_year"), `<p class="big">${eurShort(T.importe)}</p>
-        <p class="delta">${grant ? Math.round((100 * grant.importe) / T.importe) : 0}% ${t("grant_share")}</p>${yearChart(r.por_anio)}`, btn("#/proyectos", t("see_projects")))}
+      ${moneyCard(r, grant)}
       ${card(t("exec_t"), t("exec_sub"), `<p class="big">${eurShort(T.importe)} <small>${t("of")} ${eurShort(T.presupuesto)}</small></p>
         <div class="seg">${Array.from({ length: 10 }, (_, i) => `<span class="${i < Math.round((10 * T.importe) / T.presupuesto) ? "on" : ""}"></span>`).join("")}</div>`)}
       <h2 class="list-h">${t("top_benef")}</h2>
@@ -147,6 +173,10 @@ function viewHome() {
     </div>
     <div class="col">
       ${card(t("who_t"), t("who_sub"), bubbles(r.por_tipo_beneficiario || []))}
+      ${card(t("cov_t"), t("cov_sub"), `<ul class="cov">
+        <li><b>${t("cov_grants")}</b><span>${num(T.convocatorias)} ${t("k_convs")} · ${eurShort(T.importe)} ${t("cov_gross")}</span></li>
+        <li><b>${t("cov_contracts")}</b><span id="cov-contr">${t("loading")}</span></li>
+        <li class="no"><b>${t("cov_missing")}</b><span>${t("cov_missing_list")}</span></li></ul>`, btn("#/metodologia", t("nav_method")))}
       ${card(t("what_t"), t("what_sub"), `<div class="hbars">${fines.map((f, k) => `<a href="#/proyectos?q=${encodeURIComponent(f.nombre)}"><span class="hl"><span>${esc(f.nombre)}</span><span class="sub">${eurShort(f.importe)}</span></span>
         <span class="track"><span style="width:${(100 * f.importe) / fmax}%;background:${COLORS[k % 3]}"></span></span></a>`).join("")}</div>`)}
     </div>
@@ -503,7 +533,7 @@ async function showContrato(id) {
       ${row("c_deadline", c.plazo != null ? `${num(c.plazo)} ${t("c_days")}` : "")}
       ${row("c_date", esc(c.fecha))}
       ${row("c_recurrent", c.recurrente ? `${num(c.recurrente)} ${t("c_recurrent_n")}` : "")}
-      ${row("m_official_c", `<a href="${esc(c.url)}" target="_blank" rel="noopener">contrataciondelestado.es ↗</a>`)}</dl>
+      ${row("m_official_c", `<a href="${esc(c.url)}" target="_blank" rel="noopener">${esc((c.url.match(/^https?:\/\/(?:www\.)?([^/]+)/) || [])[1] || "contrataciondelestado.es")} ↗</a>`)}</dl>
     <h2>${t("c_winners")}</h2>
     ${c.adj.length ? `<div class="table-wrap"><table><tbody>${c.adj.map((a) => `<tr><td>${esc(a.nombre)}<div class="t-sub">${esc(a.nif || "")}</div></td><td class="num">${eur(a.importe)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">${t("none")}</p>`}
     ${explainBlock("c", "c:" + c.cid, c, c.organo, /ESTADO|OTRAS ENTIDADES/.test(c.ambito || ""))}`);

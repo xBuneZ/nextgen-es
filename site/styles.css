@@ -237,3 +237,15 @@ td .sub { font-weight: 400; }
 .req { width: 100%; margin: 8px 0; font: inherit; font-size: 13px; line-height: 1.5; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--soft); color: var(--text); resize: vertical; }
 .sol-status { font-size: 14px; margin: 4px 0; }
 .sol-list { font-size: 13px; margin: 4px 0 0; padding-left: 18px; }
+
+/* Portada: desglose honesto y cobertura */
+.brk { list-style: none; padding: 0; margin: 16px 0 4px; font-size: 13px; }
+.brk li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+.brk li small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+.brk li b { white-space: nowrap; font-weight: 600; }
+.brk li.tot { color: var(--muted); }
+h3.mini { font-size: 13px; font-weight: 600; margin: 18px 0 0; color: var(--muted); }
+.cov { list-style: none; padding: 0; margin: 14px 0 0; display: flex; flex-direction: column; gap: 12px; font-size: 13px; }
+.cov li { display: flex; flex-direction: column; gap: 2px; }
+.cov li span { color: var(--muted); }
+.cov li.no b { color: var(--warn-fg); }
