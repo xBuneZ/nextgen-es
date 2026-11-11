@@ -38,8 +38,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin main
           git add site/data/contratos.json
           git diff --cached --quiet && echo "Sin cambios" && exit 0
           git commit -m "Datos: contratos PRTR $(date -u +%F)"
+          git pull --rebase origin main
           git push
