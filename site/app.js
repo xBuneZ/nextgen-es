@@ -131,7 +131,7 @@ function moneyCard(r, grant) {
 function fillHome() {
   const el = $("#cov-contr");
   if (!el) return;
-  fetch("data/referencia.json").then((r) => (r.ok ? r.json() : null)).then((ref) => {
+  fetch("referencia.json").then((r) => (r.ok ? r.json() : null)).then((ref) => {
     const li = $("#cov-ref");
     if (!ref || !li) return;
     li.innerHTML = `<b>${t("ref_title")}</b><span>${t("ref_alloc").replace("{a}", eurShort(ref.subvenciones_asignadas))}

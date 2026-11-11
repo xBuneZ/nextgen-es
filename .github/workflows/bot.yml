@@ -28,9 +28,14 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: main
+      - name: Datos publicados (rama datos)
+        uses: actions/checkout@v7
+        with:
+          ref: datos
+          path: site/data
       - name: Publicar
         env:
           BSKY_HANDLE: ${{ secrets.BSKY_HANDLE }}

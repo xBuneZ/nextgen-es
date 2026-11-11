@@ -17,24 +17,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - name: Datos publicados (rama datos)
+        uses: actions/checkout@v7
+        with:
+          ref: datos
+          path: site/data
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Restaurar caché de la BDNS
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: etl/.cache
           key: bdns-${{ github.run_id }}
           restore-keys: bdns-
       - name: Descargar datos de la BDNS
         run: python3 etl/fetch_bdns.py --workers 6 --refresh-days 365
-      - name: Guardar cambios
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add site/data
-          git diff --cached --quiet && echo "Sin cambios" && exit 0
-          git commit -m "Datos: actualización BDNS $(date -u +%F)"
-          git pull --rebase origin main
-          git push
+      - name: Publicar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: etl/publicar_datos.sh "Subvenciones: BDNS $(date -u +%F)" resumen.json convocatorias.json convocatorias beneficiarios.json

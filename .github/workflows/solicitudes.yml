@@ -20,16 +20,11 @@ jobs:
     if: github.event_name != 'issues' || contains(github.event.issue.labels.*.name, 'transparencia')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - run: python3 etl/solicitudes.py
+      - uses: actions/checkout@v7
+      - run: mkdir -p site/data && python3 etl/solicitudes.py
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Guardar cambios
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add site/data/solicitudes.json
-          git diff --cached --quiet && echo "Sin cambios" && exit 0
-          git commit -m "Datos: solicitudes de transparencia"
-          git pull --rebase origin main
-          git push
+      - name: Publicar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: etl/publicar_datos.sh "Solicitudes de transparencia $(date -u +%F)" solicitudes.json

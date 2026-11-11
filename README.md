@@ -29,8 +29,18 @@ Fuente: [Sistema Nacional de Publicidad de Subvenciones y Ayudas Públicas (BDNS
 ```
 etl/fetch_bdns.py      Descarga y procesado (Python, solo biblioteca estándar)
 site/                  Web estática (HTML + JS, sin dependencias ni compilación)
-site/data/*.json       Datos generados
+site/data/             Datos generados (rama `datos`, no en `main`)
 docs/                  Metodología y hoja de ruta
+```
+
+## Datos
+
+Los datos generados **no se guardan en la rama `main`**, sino en la rama `datos`. Esa rama tiene siempre un único commit, que se reemplaza en cada actualización, para que el historial del repositorio no crezca. La web publicada combina las dos ramas (workflow `pages.yml`).
+
+Para trabajar en local:
+
+```bash
+git clone --depth 1 --branch datos https://github.com/xBuneZ/nextgen-es site/data
 ```
 
 ## Uso local

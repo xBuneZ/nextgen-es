@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       periods:
-        description: "Periodos a procesar (YYYY o YYYYMM separados por espacios). Vacío = 2021..hoy"
+        description: "Periodos a procesar (YYYYMM separados por espacios). Vacío = 2021..hoy"
         required: false
         default: ""
 
@@ -14,7 +14,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: update-data
+  group: update-contratos
   cancel-in-progress: false
 
 jobs:
@@ -22,24 +22,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 350
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - name: Datos publicados (rama datos)
+        uses: actions/checkout@v7
+        with:
+          ref: datos
+          path: site/data
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Restaurar caché de contratos
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: etl/.cache/contratos
           key: placsp-${{ github.run_id }}
           restore-keys: placsp-
-      - name: Procesar contratos PRTR de la PLACSP
+      - name: Procesar contratos PRTR (Plataforma de Contratación y plataformas autonómicas)
         run: python3 etl/fetch_contratos.py ${{ inputs.periods && format('--periods {0}', inputs.periods) || '' }}
-      - name: Guardar cambios
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A site/data
-          git diff --cached --quiet && echo "Sin cambios" && exit 0
-          git commit -m "Datos: contratos PRTR $(date -u +%F)"
-          git pull --rebase origin main
-          git push
+      - name: Publicar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: etl/publicar_datos.sh "Contratos PRTR $(date -u +%F)" contratos
