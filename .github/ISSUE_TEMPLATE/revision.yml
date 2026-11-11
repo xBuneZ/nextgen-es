@@ -1,0 +1,28 @@
+name: Proponer un proyecto para revisión
+description: Señala una convocatoria o beneficiario que merezca atención pública
+labels: ["revision"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Aporta **hechos verificables y fuentes**. No publiques datos personales de particulares ni acusaciones sin pruebas:
+        los issues que no cumplan estas normas se cerrarán. Si tienes indicios de delito, usa los canales oficiales (EPPO, OLAF, SNCA).
+  - type: input
+    id: bdns
+    attributes:
+      label: Código BDNS de la convocatoria
+      placeholder: "941268"
+    validations:
+      required: true
+  - type: textarea
+    id: motivo
+    attributes:
+      label: ¿Por qué merece revisión?
+    validations:
+      required: true
+  - type: textarea
+    id: fuentes
+    attributes:
+      label: Fuentes (BOE, boletines, prensa, registros…)
+    validations:
+      required: true

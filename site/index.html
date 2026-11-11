@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Next Gen España — ¿En qué se gastan los fondos?</title>
+  <meta name="description" content="Buscador ciudadano de las ayudas financiadas en España con los fondos europeos Next Generation EU (MRR), con datos oficiales de la BDNS.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap top-inner">
+      <a href="#/" class="brand"><span class="flag" aria-hidden="true">€</span> <span data-i18n="brand">Next Gen España</span></a>
+      <nav>
+        <a href="#/" data-i18n="nav_home">Resumen</a>
+        <a href="#/proyectos" data-i18n="nav_projects">Proyectos</a>
+        <a href="#/beneficiarios" data-i18n="nav_benef">Beneficiarios</a>
+        <a href="#/metodologia" data-i18n="nav_method">Metodología</a>
+        <a href="#/denunciar" data-i18n="nav_report">Denunciar</a>
+      </nav>
+      <button id="lang" class="lang" type="button" aria-label="Language">EN</button>
+    </div>
+  </header>
+
+  <main id="app" class="wrap"><p class="muted" data-i18n="loading">Cargando datos…</p></main>
+
+  <dialog id="modal"><div id="modal-body"></div><button class="close" type="button" aria-label="Cerrar">×</button></dialog>
+
+  <footer class="wrap foot">
+    <p data-i18n="foot_source">Fuente: Sistema Nacional de Publicidad de Subvenciones y Ayudas Públicas (BDNS), convocatorias marcadas con financiación MRR. Datos reutilizados conforme a su aviso legal.</p>
+    <p data-i18n="foot_disclaimer">Los indicadores son señales automáticas basadas en datos públicos. No constituyen ninguna acusación ni prueban irregularidad alguna.</p>
+    <p class="muted" id="generated"></p>
+  </footer>
+  <script src="i18n.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

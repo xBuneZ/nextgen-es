@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Fiscalía Europea (EPPO) — denunciar delitos contra fondos UE
+    url: https://www.eppo.europa.eu/en/reporting-crime-eppo
+    about: Si tienes indicios de delito, acude a la vía oficial.
+  - name: OLAF — Oficina Europea de Lucha contra el Fraude
+    url: https://anti-fraud.ec.europa.eu/olaf-and-you/report-fraud_en
+    about: Canal de denuncia de fraude con fondos europeos.
