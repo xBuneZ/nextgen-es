@@ -2,7 +2,7 @@
 
 // Repositorio de GitHub donde se reciben propuestas de revisión (issues).
 // Cámbialo por el tuyo, p. ej. "usuario/nextgen-es".
-const REPO = "OWNER/nextgen-es";
+const REPO = "xBuneZ/nextgen-es";
 
 const FLAGS = ["nominativa", "concesion_directa", "concentracion", "beneficiario_unico_1m", "supera_presupuesto", "sin_concesiones"];
 const PAGE = 50;
