@@ -2,7 +2,7 @@ window.I18N = {
   es: {
     brand: "Next Gen España",
     m_official_c: "Ficha en la Plataforma de Contratación", c_awarded: "Adjudicado",
-    cflag_ganador_recurrente: "Ganador recurrente sin competencia", cflagd_ganador_recurrente: "La misma empresa ha ganado 3 o más contratos del mismo órgano con un solo licitador o por negociado sin publicidad.",
+    cflag_ganador_recurrente: "Ganador recurrente sin competencia", cflagd_ganador_recurrente: "Contrato sin competencia, y la misma empresa ya acumula 3 o más contratos así (un solo licitador o negociado sin publicidad) con este órgano. No cuentan los derivados de acuerdos marco.",
     cflag_plazo_corto: "Plazo corto para ofertar", cflagd_plazo_corto: "Contrato de 1 M€ o más con menos de 20 días entre la publicación del anuncio y el fin del plazo de ofertas: dificulta que otras empresas se presenten.",
     c_pub: "Anuncio publicado", c_doue: "también en el Diario Oficial de la UE", c_deadline: "Plazo para ofertar", c_days: "días", c_recurrent: "Mismo ganador sin competencia", c_recurrent_n: "contratos de este órgano",
     clear_filters: "Quitar filtros ×", chips_all: "Se muestran solo los que tienen todos los indicadores elegidos.",

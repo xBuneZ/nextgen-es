@@ -270,15 +270,26 @@ def build() -> None:
     tot = {"contratos": 0, "adjudicados": 0, "importe": 0.0, "presupuesto": 0.0}
 
     # Ganador recurrente sin competencia: misma empresa, mismo órgano, >=3 contratos
-    # con un solo licitador o negociados sin publicidad.
+    # que por sí mismos no tuvieron competencia (un solo licitador en un procedimiento
+    # competitivo, o negociado sin publicidad). No cuentan los derivados de acuerdos
+    # marco (la competencia se hizo al seleccionar proveedores) ni los contratos con
+    # más de dos adjudicatarios.
+    SIN_LICITACION_PROPIA = ("Negociado sin publicidad", "Derivado de acuerdo marco", "Contrato menor")
+
+    def sin_competencia(r) -> bool:
+        lot = [l for l in r["lotes"] if l.get("importe") and l.get("adj")]
+        if not lot or len({(l.get("nif") or l["adj"]).upper() for l in lot}) > 2:
+            return False
+        if r["proc"] == "Negociado sin publicidad":
+            return True
+        return r["proc"] not in SIN_LICITACION_PROPIA and all(l.get("ofertas") == 1 for l in lot)
+
     nocomp = defaultdict(set)
     for r in recs:
-        ganadores = {(l.get("nif") or l["adj"]).upper() for l in r["lotes"] if l.get("adj")}
-        if len(ganadores) > 2:  # acuerdos marco con muchos adjudicatarios: no es "un ganador recurrente"
-            continue
-        for l in r["lotes"]:
-            if l.get("adj") and (l.get("ofertas") == 1 or r["proc"] == "Negociado sin publicidad"):
-                nocomp[(r["organo"], (l.get("nif") or l["adj"]).upper())].add(r["id"])
+        if sin_competencia(r):
+            for l in r["lotes"]:
+                if l.get("importe") and l.get("adj"):
+                    nocomp[(r["organo"], (l.get("nif") or l["adj"]).upper())].add(r["id"])
     recurrentes = {k: len(v) for k, v in nocomp.items() if len(v) >= 3}
 
     def plazo_dias(r):
@@ -307,7 +318,8 @@ def build() -> None:
         if plazo is not None and 0 <= plazo < 20 and (r.get("presupuesto") or 0) >= 1_000_000 \
                 and r["proc"] not in ("Negociado sin publicidad", "Derivado de acuerdo marco", "Contrato menor"):
             flags.append("plazo_corto")
-        rec_n = max((recurrentes.get((r["organo"], (l.get("nif") or l["adj"]).upper()), 0) for l in lotes), default=0)
+        rec_n = max((recurrentes.get((r["organo"], (l.get("nif") or l["adj"]).upper()), 0) for l in lotes), default=0) \
+            if sin_competencia(r) else 0
         if rec_n:
             flags.append("ganador_recurrente")
         for fl in flags:
