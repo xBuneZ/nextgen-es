@@ -26,6 +26,7 @@ import re
 import sys
 import time
 import urllib.parse
+import unicodedata
 import urllib.request
 from collections import defaultdict
 from pathlib import Path
@@ -129,6 +130,70 @@ def instrumento_grupo(inst: str | None) -> str:
 
 def r2(x: float) -> float:
     return round(float(x or 0), 2)
+
+
+# ---------- Índice de búsqueda de TODOS los beneficiarios (no solo los 5.000 mayores) ----------
+# Se reparte en trozos pequeños para que la web solo descargue el que necesita:
+#   benef_idx/w_XX.json  entidades con alguna palabra del nombre que empieza por XX
+#   benef_idx/n_XX.json  entidades cuyo NIF tiene XX en las posiciones 2 y 3
+# Fila: [nif, nombre, importe, nº convocatorias, [[convocatoria, importe], …10 mayores]]
+PALABRAS_VACIAS = {"sl", "sa", "slu", "sau", "sll", "slne", "scoop", "coop", "sccl", "cb", "sc", "de", "del", "la", "las",
+                   "los", "el", "y", "e", "i", "en", "para", "por", "sociedad", "limitada", "anonima", "unipersonal",
+                   "cooperativa", "laboral", "profesional", "and", "the", "of"}
+
+
+def palabras_indice(nombre: str) -> set[str]:
+    n = unicodedata.normalize("NFD", (nombre or "").lower()).encode("ascii", "ignore").decode()
+    return {w for w in re.split(r"[^a-z0-9]+", n) if len(w) >= 3 and w not in PALABRAS_VACIAS}
+
+
+def indice_beneficiarios(entidades, max_bytes: int = 250_000) -> None:
+    """Trozos por prefijo de palabra (2 letras; los que pasan de max_bytes se subdividen
+    a 3, 4 o 5 letras) y por NIF. indice.json lista los prefijos para que la web sepa
+    qué trozo pedir."""
+    import shutil
+    filas, palabras = [], []
+    for b in entidades:
+        convs = sorted(b["convs"].items(), key=lambda kv: -kv[1])
+        filas.append([b["nif"] or "", b["nombre"], round(b["importe"]), len(convs), [[k, round(v)] for k, v in convs[:10]]])
+        palabras.append(palabras_indice(b["nombre"]))
+    tam = [len(json.dumps(f, ensure_ascii=False)) for f in filas]
+
+    def reparte(ids, n):
+        g = defaultdict(set)
+        for i in ids:
+            for w in palabras[i]:
+                if len(w) >= n:
+                    g[w[:n]].add(i)
+        return g
+
+    finales = {}
+    pendientes = reparte(range(len(filas)), 2)
+    while pendientes:
+        k, ids = pendientes.popitem()
+        if len(k) < 5 and sum(tam[i] for i in ids) > max_bytes:
+            sub = {kk: v for kk, v in reparte(ids, len(k) + 1).items() if kk.startswith(k)}
+            # las palabras que acaban justo en el prefijo se quedan en el trozo corto
+            resto = {i for i in ids if any(w == k for w in palabras[i])}
+            if resto:
+                finales[k] = resto
+            pendientes.update(sub)
+        else:
+            finales[k] = ids
+    d = OUT / "benef_idx"
+    shutil.rmtree(d, ignore_errors=True)
+    d.mkdir(parents=True)
+    dump = lambda path, obj: path.write_text(json.dumps(obj, ensure_ascii=False, separators=(",", ":")))
+    for k, ids in finales.items():
+        dump(d / f"w_{k}.json", sorted((filas[i] for i in ids), key=lambda f: -f[2]))
+    por_nif = defaultdict(list)
+    for f in filas:
+        if len(f[0]) >= 3:
+            por_nif[f[0][1:3].lower()].append(f)
+    for k, fs in por_nif.items():
+        dump(d / f"n_{k}.json", sorted(fs, key=lambda f: -f[2]))
+    dump(d / "indice.json", {"w": sorted(finales), "n": sorted(por_nif), "total": len(filas)})
+    print(f"  índice de beneficiarios: {len(filas)} entidades en {len(finales) + len(por_nif)} trozos", file=sys.stderr)
 
 
 def build(records: list[dict], force: bool = False) -> None:
@@ -260,6 +325,7 @@ def build(records: list[dict], force: bool = False) -> None:
         by_finalidad[fin]["importe"] += importe
 
     convs_out.sort(key=lambda c: -c["importe"])
+    indice_beneficiarios(benef.values())
     benef_out = sorted(benef.values(), key=lambda b: -b["importe"])[:5000]
     for b in benef_out:
         b["importe"] = r2(b["importe"])

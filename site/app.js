@@ -221,7 +221,7 @@ function viewHome() {
 function filteredConvs() {
   const q = norm(state.q), min = Number(state.min) || 0;
   let rows = DB.convs.filter((c) =>
-    (!q || c._s.includes(q)) &&
+    (!q || c._s.includes(q) || (state.extraIds && state.extraIds.has(String(c.id)))) &&
     (!state.admin || c.nivel1 === state.admin) &&
     (!state.tipo || c.tipo === state.tipo) &&
     flagMatch(c.flags, state.flag) &&
@@ -271,7 +271,18 @@ function pager(pages, cur) {
 
 function bindProjects() {
   const upd = () => { state.page = 0; syncUrl(); renderProjectRows(); };
-  $("#q").addEventListener("input", (e) => { state.q = e.target.value; upd(); });
+  // Además del título y los 5 mayores beneficiarios, busca en el índice completo de beneficiarios
+  const refresh = () => {
+    const q0 = state.q;
+    state.extraIds = new Set();
+    benefSearch(q0).then((rows) => {
+      if (state.q !== q0 || !$("#results")) return;
+      rows.forEach((r) => r[4].forEach(([id]) => state.extraIds.add(String(id))));
+      if (state.extraIds.size) renderProjectRows();
+    });
+  };
+  $("#q").addEventListener("input", (e) => { state.q = e.target.value; upd(); refresh(); });
+  refresh();
   ["admin", "tipo", "min"].forEach((id) => $("#" + id).addEventListener("input", (e) => { state[id] = e.target.value; upd(); }));
   const setFlag = (v) => { state.flag = v; $("#chips").outerHTML = chipBar("chips", FLAGS, "flag", DB.resumen.indicadores, v); bindChips(); upd(); };
   const bindChips = () => $("#chips").addEventListener("click", (e) => { const b = e.target.closest("button[data-f]"); if (b) setFlag(b.dataset.f ? toggleFlag(state.flag, b.dataset.f) : ""); });
@@ -745,6 +756,48 @@ const qsOf = (o) => { const p = new URLSearchParams(); for (const [k, v] of Obje
 const cHref = (q) => "#/contratos" + qsOf({ q });
 function syncHash(base, o) { history.replaceState(null, "", base + qsOf(o)); }
 
+// ---------- Índice completo de beneficiarios (todas las entidades, en trozos) ----------
+const BIDX = { man: null, shards: new Map() };
+const BSTOP = new Set("sl sa slu sau sll slne scoop coop sccl cb sc de del la las los el y e i en para por sociedad limitada anonima unipersonal cooperativa laboral profesional and the of".split(" "));
+function bidxShard(man, nq) {
+  const compact = nq.replace(/[^a-z0-9]/g, "");
+  if (/^[a-z]?\d{6,}[a-z0-9]?$/.test(compact) || /^[a-z]\d{3,}/.test(compact)) {
+    const k = compact.slice(1, 3);
+    return man.n.includes(k) ? "n_" + k : null;
+  }
+  const words = nq.split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !BSTOP.has(w));
+  if (!words.length) return null;
+  const w = words.sort((a, b) => b.length - a.length)[0];
+  const keys = BIDX.keys || (BIDX.keys = new Set(man.w));
+  for (let n = Math.min(5, w.length); n >= 2; n--) if (keys.has(w.slice(0, n))) return "w_" + w.slice(0, n);
+  return null;
+}
+async function benefSearch(q) {
+  const nq = norm(q).trim();
+  if (nq.length < 3) return [];
+  if (!BIDX.man) BIDX.man = fetch("data/benef_idx/indice.json").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const man = await BIDX.man;
+  const k = man && bidxShard(man, nq);
+  if (!k) return [];
+  if (!BIDX.shards.has(k)) BIDX.shards.set(k, fetch(`data/benef_idx/${k}.json`).then((r) => (r.ok ? r.json() : [])).catch(() => []));
+  const rows = await BIDX.shards.get(k);
+  const nqc = nq.replace(/\s+/g, "");
+  return rows.filter((r) => norm(r[1]).includes(nq) || (r[0] && r[0].toLowerCase().includes(nqc)));
+}
+// Fila del índice -> objeto como los de la lista de empresas (fusionando sus contratos si los tiene)
+function bidxToEmp(r) {
+  const key = r[0] || r[1];
+  const e = EMP.byKey && EMP.byKey.get(String(key).toUpperCase());
+  const base = e ? { ...e } : { key, nombre: r[1], nif: r[0], con: 0, ncon: 0, nno: 0, impno: 0, orgs: [], pctNo: -1 };
+  Object.assign(base, { sub: r[2], nsub: r[3], convs: r[4] });
+  base.total = base.sub + (base.con || 0);
+  return base;
+}
+function mergeEmp(list, extra) {
+  const seen = new Set(list.map((e) => String(e.key).toUpperCase()));
+  return list.concat(extra.map(bidxToEmp).filter((e) => !seen.has(String(e.key).toUpperCase())));
+}
+
 // ---------- Empresas: subvenciones + contratos ----------
 const MEDIO_PROPIO = /\bM\.\s?P\.|medio propio|\bTRAGSA|TRAGSATEC/i;
 const EMP = { loading: null, rows: null };
@@ -781,7 +834,7 @@ function viewBenef() {
 function renderBenefRows() {
   syncHash("#/beneficiarios", { q: bState.q });
   const q = norm(bState.q);
-  const rows = EMP.rows.filter((b) => !q || b._s.includes(q));
+  const rows = mergeEmp(EMP.rows.filter((b) => !q || b._s.includes(q)), q.length >= 3 ? bState.extra || [] : []);
   const k = bState.sort, d = bState.dir;
   rows.sort((a, b) => (a[k] > b[k] ? d : a[k] < b[k] ? -d : 0));
   const pages = Math.max(1, Math.ceil(rows.length / PAGE));
@@ -800,7 +853,13 @@ function renderBenefRows() {
 function bindBenef() {
   loadEmpresas().then(() => {
     if (!$("#bresults")) return;
-    $("#bq").addEventListener("input", (e) => { bState.q = e.target.value; bState.page = 0; renderBenefRows(); });
+    const refresh = () => {
+      const q0 = bState.q;
+      bState.extra = [];
+      benefSearch(q0).then((rows) => { if (bState.q === q0 && $("#bresults")) { bState.extra = rows; renderBenefRows(); } });
+    };
+    $("#bq").addEventListener("input", (e) => { bState.q = e.target.value; bState.page = 0; renderBenefRows(); refresh(); });
+    refresh();
     $("#bresults").addEventListener("click", (e) => {
       const s = e.target.closest("th[data-sort]");
       if (s) { const key = s.dataset.sort; bState.dir = bState.sort === key ? -bState.dir : -1; bState.sort = key; renderBenefRows(); return; }
@@ -817,7 +876,11 @@ async function showBenef(key) {
   openModal(`<p class="muted">${t("loading")}</p>`);
   await loadEmpresas();
   const e = EMP.byKey.get(String(key).toUpperCase());
-  const b = DB.benef.find((x) => (x.nif || x.nombre) === key);
+  let b = DB.benef.find((x) => (x.nif || x.nombre) === key);
+  if (!b) {
+    const r = (await benefSearch(key)).find((x) => String(x[0] || x[1]).toUpperCase() === String(key).toUpperCase());
+    if (r) b = { nombre: r[1], nif: r[0], importe: r[2], n_convs: r[3], convs: r[4] };
+  }
   if (!e && !b) return openModal(`<p class="muted">${t("none")}</p>`);
   const nombre = (e || b).nombre, nif = (e || b).nif || "";
   const grants = b ? b.convs.map(([id, imp]) => {
@@ -853,9 +916,11 @@ async function runSearch(q) {
   const nq = norm(q);
   const box = () => $("#sres");
   const sec = (title, n, items, more) => `<section class="card sres"><div class="card-head"><h2>${esc(title)} <span class="muted">${num(n)}</span></h2>${n && more ? more : ""}</div>${n ? `<ul class="slist">${items}</ul>` : `<p class="muted">${t("search_none")}</p>`}</section>`;
-  const projs = DB.convs.filter((c) => c._s.includes(nq)).sort((a, b) => b.importe - a.importe);
   await loadEmpresas();
-  const emps = EMP.rows.filter((e) => e._s.includes(nq)).sort((a, b) => b.total - a.total);
+  const bRows = await benefSearch(q);
+  const ids = new Set(bRows.flatMap((r) => r[4].map(([id]) => String(id))));
+  const projs = DB.convs.filter((c) => c._s.includes(nq) || ids.has(String(c.id))).sort((a, b) => b.importe - a.importe);
+  const emps = mergeEmp(EMP.rows.filter((e) => e._s.includes(nq)), bRows).sort((a, b) => b.total - a.total);
   const render = (contr, orgs) => {
     if (!box()) return;
     box().innerHTML = `<div class="cols">
