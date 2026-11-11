@@ -39,6 +39,10 @@ window.I18N = {
     flagd_supera_presupuesto: "Lo concedido supera en más de un 10% el presupuesto publicado.",
     flagd_sin_concesiones: "Convocatoria de más de 100.000 € con más de 18 meses de antigüedad y sin concesiones publicadas: falta de transparencia.",
     pf_note: "personas físicas (no se muestran por privacidad)",
+    by_instr: "Tipo de ayuda", by_tb: "Quién la recibe",
+    ins_subvencion: "Subvención (a fondo perdido)", ins_garantia: "Garantías / avales", ins_prestamo: "Préstamos y anticipos", ins_otro: "Otros",
+    tb_privado: "Empresas y entidades privadas", tb_publico: "Administraciones y entes públicos", tb_pf: "Personas físicas",
+    double_note: "Parte del dinero que reciben las administraciones se vuelve a conceder en sus propias convocatorias, por lo que el total puede contar dos veces algunos fondos. Garantías y préstamos no son dinero a fondo perdido.",
   },
   en: {
     brand: "Next Gen Spain",
@@ -80,5 +84,9 @@ window.I18N = {
     flagd_supera_presupuesto: "Amount awarded exceeds the published budget by more than 10%.",
     flagd_sin_concesiones: "Call over €100,000, older than 18 months, with no awards published: a transparency gap.",
     pf_note: "individuals (hidden for privacy)",
+    by_instr: "Type of aid", by_tb: "Who receives it",
+    ins_subvencion: "Grants (non-repayable)", ins_garantia: "Guarantees", ins_prestamo: "Loans and advances", ins_otro: "Other",
+    tb_privado: "Companies and private entities", tb_publico: "Public administrations and bodies", tb_pf: "Individuals",
+    double_note: "Some money received by public administrations is awarded again through their own calls, so the total may count some funds twice. Guarantees and loans are not non-repayable money.",
   },
 };

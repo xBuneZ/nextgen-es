@@ -74,6 +74,11 @@ function viewHome() {
     <section class="card"><h2>${t("by_org")}</h2>${bars(r.por_organo, { href: (i) => `#/proyectos?q=${encodeURIComponent(i.nombre)}` })}</section>
     <section class="card"><h2>${t("by_admin")}</h2>${bars(r.por_administracion, { href: (i) => `#/proyectos?admin=${encodeURIComponent(i.nombre)}` })}
       <h2>${t("by_year")}</h2>${bars(r.por_anio, { limit: 20 })}</section>
+    <section class="card"><h2>${t("by_instr")}</h2>
+      ${bars((r.por_instrumento || []).map((i) => ({ ...i, nombre: t("ins_" + i.nombre) })))}
+      <h2>${t("by_tb")}</h2>
+      ${bars((r.por_tipo_beneficiario || []).map((i) => ({ ...i, nombre: t("tb_" + i.nombre) })))}
+      <p class="muted" style="font-size:13px">${esc(t("double_note"))}</p></section>
     <section class="card"><h2>${t("flags_title")}</h2>
       ${bars(ind, { value: "n", fmt: num, href: (i) => `#/proyectos?flag=${i.f}` })}
       <p class="muted" style="font-size:13px">${esc(t("foot_disclaimer"))} <a href="#/metodologia">${t("nav_method")}</a></p></section>

@@ -11,7 +11,8 @@ API pública de la BDNS (`https://www.infosubvenciones.es/bdnstrans/api`):
 
 ## Tratamiento
 - Beneficiario: el NIF es el primer token. NIF de persona jurídica → se publica. DNI/NIE o beneficiario enmascarado (`***`) → persona física, solo se agrega.
-- "Concedido" = suma de importes de concesión publicados (no pagos efectivos).
+- "Concedido" = suma de importes de concesión publicados (no pagos efectivos). Incluye **garantías y préstamos**, que se desglosan aparte.
+- Las concesiones a administraciones públicas (NIF que empieza por P, Q o S) pueden volver a concederse en convocatorias propias: el total puede contener **doble cómputo**.
 
 ## Indicadores
 | Código | Regla |

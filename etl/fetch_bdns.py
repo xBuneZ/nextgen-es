@@ -116,6 +116,17 @@ def fetch_one(conv: dict, refresh: bool) -> dict:
     return rec
 
 
+def instrumento_grupo(inst: str | None) -> str:
+    i = (inst or "").upper()
+    if "GARANT" in i or "AVAL" in i:
+        return "garantia"
+    if "PRÉSTAMO" in i or "PRESTAMO" in i or "ANTICIPO" in i:
+        return "prestamo"
+    if "SUBVENCI" in i or "DINERARIA" in i:
+        return "subvencion"
+    return "otro"
+
+
 def r2(x: float) -> float:
     return round(float(x or 0), 2)
 
@@ -129,6 +140,8 @@ def build(records: list[dict]) -> None:
     by_year = defaultdict(lambda: {"n": 0, "importe": 0.0})
     by_finalidad = defaultdict(lambda: {"n": 0, "importe": 0.0})
     flags_count = defaultdict(int)
+    by_instr = defaultdict(lambda: {"n": 0, "importe": 0.0})
+    by_tipo_benef = defaultdict(lambda: {"n": 0, "importe": 0.0})
     tot = {"convocatorias": 0, "concesiones": 0, "importe": 0.0,
            "personas_fisicas_n": 0, "personas_fisicas_importe": 0.0, "presupuesto": 0.0}
 
@@ -150,6 +163,12 @@ def build(records: list[dict]) -> None:
             imp = float(c["i"] or 0)
             importe += imp
             nif, name, is_pf = parse_beneficiario(c["b"])
+            ins = instrumento_grupo(c.get("inst"))
+            by_instr[ins]["n"] += 1
+            by_instr[ins]["importe"] += imp
+            tb = "pf" if is_pf else ("publico" if nif and nif[0] in "PQS" else "privado")
+            by_tipo_benef[tb]["n"] += 1
+            by_tipo_benef[tb]["importe"] += imp
             if is_pf:
                 pf_n += 1
                 pf_imp += imp
@@ -252,6 +271,8 @@ def build(records: list[dict]) -> None:
         "por_anio": sorted(ranked(by_year), key=lambda x: x["nombre"]),
         "por_finalidad": ranked(by_finalidad, 20),
         "indicadores": dict(flags_count),
+        "por_instrumento": ranked(by_instr),
+        "por_tipo_beneficiario": ranked(by_tipo_benef),
     }
 
     OUT.mkdir(parents=True, exist_ok=True)
@@ -268,11 +289,15 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--workers", type=int, default=6)
     ap.add_argument("--refresh", action="store_true", help="ignora la caché local")
+    ap.add_argument("--build-only", action="store_true", help="regenera los JSON desde la caché")
     ap.add_argument("--refresh-days", type=int, default=120,
                     help="re-descarga convocatorias publicadas en los últimos N días")
     args = ap.parse_args()
     CACHE.mkdir(parents=True, exist_ok=True)
 
+    if args.build_only:
+        build([json.loads(f.read_text()) for f in sorted(CACHE.glob("*.json"))])
+        return
     print("Listando convocatorias MRR…", file=sys.stderr)
     convs = list_convocatorias(args.limit)
     cutoff = (dt.date.today() - dt.timedelta(days=args.refresh_days)).isoformat()
