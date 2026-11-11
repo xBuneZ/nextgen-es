@@ -339,6 +339,98 @@ function viewReport() {
     <p>If you think a project deserves public attention, you can <b>submit it for review</b> from its detail page. Please provide verifiable facts and sources.</p></div>`;
 }
 
+
+// ---------- Contratos públicos (PLACSP) ----------
+const CFLAGS = ["licitador_unico", "sin_baja", "negociado_sin_publicidad", "emergencia", "supera_presupuesto"];
+const CT = { data: null, loading: null };
+const cstate = { q: "", proc: "", flag: "", ambito: "", page: 0, sort: "importe", dir: -1 };
+
+function loadContratos() {
+  if (!CT.loading) {
+    CT.loading = fetch("data/contratos.json").then((r) => (r.ok ? r.json() : null)).then((d) => {
+      if (d) d.contratos.forEach((c, i) => { c._i = i; c._s = norm([c.objeto, c.organo, c.exp, c.ruta, ...c.adj.map((a) => a.nombre + " " + a.nif)].join(" ")); });
+      CT.data = d;
+      return d;
+    }).catch(() => null);
+  }
+  return CT.loading;
+}
+const cflagTags = (flags) => (flags || []).map((f) => `<span class="tag" title="${esc(t("cflagd_" + f))}">${esc(t("cflag_" + f))}</span>`).join("");
+
+function viewContratos() {
+  const d = CT.data;
+  if (!d) return `<h1>${t("contracts_title")}</h1><p class="notice">${t("contracts_none")}</p>`;
+  const T = d.totales, I = d.indicadores;
+  const procs = d.por_procedimiento.map((p) => p.nombre).filter((p) => p && p !== "?");
+  const ambitos = [...new Set(d.contratos.map((c) => c.ambito).filter(Boolean))].sort();
+  const opt = (v, l, cur) => `<option value="${esc(v)}" ${v === cur ? "selected" : ""}>${esc(l)}</option>`;
+  const pct = (n) => (T.adjudicados ? Math.round((100 * n) / T.adjudicados) : 0);
+  return `<div class="hero"><h1>${t("contracts_title")}</h1><p class="lead">${esc(t("contracts_lead"))}</p></div>
+  <div class="kpis">
+    <div class="kpi"><b>${eurShort(T.importe)}</b><span>${t("c_awarded_total")}</span></div>
+    <div class="kpi"><b>${num(T.adjudicados)}</b><span>${t("c_awarded_n")}</span></div>
+    <div class="kpi"><b>${pct(I.licitador_unico || 0)}%</b><span>${t("cflag_licitador_unico")}</span></div>
+    <div class="kpi"><b>${num(I.negociado_sin_publicidad || 0)}</b><span>${t("cflag_negociado_sin_publicidad")}</span></div>
+  </div>
+  <div class="filters">
+    <input type="search" id="cq" placeholder="${esc(t("search_contracts"))}" value="${esc(cstate.q)}">
+    <select id="cambito">${opt("", t("all_admins"), cstate.ambito)}${ambitos.map((a) => opt(a, a, cstate.ambito)).join("")}</select>
+    <select id="cproc">${opt("", t("all_types"), cstate.proc)}${procs.map((p) => opt(p, p, cstate.proc)).join("")}</select>
+    <select id="cflag">${opt("", t("all_flags"), cstate.flag)}${opt("*", t("any_flag"), cstate.flag)}${CFLAGS.map((f) => opt(f, t("cflag_" + f), cstate.flag)).join("")}</select>
+  </div>
+  <div id="cresults"></div>`;
+}
+
+function renderContratos() {
+  const q = norm(cstate.q);
+  const rows = CT.data.contratos.filter((c) => (!q || c._s.includes(q)) && (!cstate.proc || c.proc === cstate.proc) &&
+    (!cstate.ambito || c.ambito === cstate.ambito) &&
+    (!cstate.flag || (cstate.flag === "*" ? c.flags.length : c.flags.includes(cstate.flag))));
+  const k = cstate.sort, d = cstate.dir;
+  rows.sort((a, b) => ((a[k] ?? 0) > (b[k] ?? 0) ? d : (a[k] ?? 0) < (b[k] ?? 0) ? -d : 0));
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE));
+  cstate.page = Math.min(cstate.page, pages - 1);
+  const th = (key, l, cls = "") => `<th class="${cls}" data-sort="${key}">${esc(l)}${cstate.sort === key ? (cstate.dir < 0 ? " ↓" : " ↑") : ""}</th>`;
+  $("#cresults").innerHTML = `<p class="count">${num(rows.length)} ${t("results")} · ${eur(rows.reduce((s, r) => s + r.importe, 0))}</p>
+  <div class="table-wrap"><table><thead><tr>${th("objeto", t("c_object"))}${th("fecha", t("c_date"), "hide-sm")}${th("ofertas", t("c_offers"), "num hide-sm")}${th("importe", t("c_awarded"), "num")}</tr></thead>
+  <tbody>${rows.slice(cstate.page * PAGE, (cstate.page + 1) * PAGE).map((c) => `<tr data-ci="${c._i}">
+    <td class="t-title">${esc(c.objeto)}<div class="t-sub">${esc(c.adj[0] ? c.adj[0].nombre : "—")} · ${esc(c.organo)}</div>${cflagTags(c.flags)}</td>
+    <td class="hide-sm">${esc(c.fecha)}</td><td class="num hide-sm">${c.ofertas ?? "—"}</td><td class="num">${eur(c.importe)}</td></tr>`).join("")}</tbody></table></div>
+  ${pager(pages, cstate.page)}`;
+}
+
+function bindContratos() {
+  if (!CT.data) return;
+  const upd = () => { cstate.page = 0; renderContratos(); };
+  $("#cq").addEventListener("input", (e) => { cstate.q = e.target.value; upd(); });
+  [["cproc", "proc"], ["cflag", "flag"], ["cambito", "ambito"]].forEach(([id, k]) => $("#" + id).addEventListener("input", (e) => { cstate[k] = e.target.value; upd(); }));
+  $("#cresults").addEventListener("click", (e) => {
+    const s = e.target.closest("th[data-sort]");
+    if (s) { const key = s.dataset.sort; cstate.dir = cstate.sort === key ? -cstate.dir : -1; cstate.sort = key; renderContratos(); return; }
+    const p = e.target.closest("button[data-p]");
+    if (p) { cstate.page += Number(p.dataset.p); renderContratos(); window.scrollTo(0, 0); return; }
+    const tr = e.target.closest("tr[data-ci]");
+    if (tr) location.hash = `#/contrato/${tr.dataset.ci}`;
+  });
+  renderContratos();
+}
+
+function showContrato(i) {
+  const c = CT.data && CT.data.contratos[Number(i)];
+  if (!c) return;
+  const row = (k, v) => (v ? `<dt>${t(k)}</dt><dd>${v}</dd>` : "");
+  openModal(`<h3>${esc(c.objeto)}</h3>
+    <p class="muted">${esc(c.organo)}${c.ruta ? " · " + esc(c.ruta) : ""} · ${t("c_exp")} ${esc(c.exp)}</p>
+    ${c.flags.length ? `<div class="notice">${c.flags.map((f) => `<b>${esc(t("cflag_" + f))}</b>: ${esc(t("cflagd_" + f))}`).join("<br>")}</div>` : ""}
+    <div class="kpis"><div class="kpi"><b>${eur(c.importe)}</b><span>${t("c_awarded")} (${t("no_vat")})</span></div>
+      <div class="kpi"><b>${eur(c.presupuesto)}</b><span>${t("c_budget")}</span></div>
+      <div class="kpi"><b>${c.ofertas ?? "—"}</b><span>${t("c_offers")}</span></div></div>
+    <dl class="meta">${row("m_type", esc(c.proc))}${row("c_ctype", esc(c.tipo))}${row("m_regions", esc(c.lugar))}${row("c_date", esc(c.fecha))}
+      ${row("m_official_c", `<a href="${esc(c.url)}" target="_blank" rel="noopener">contrataciondelestado.es ↗</a>`)}</dl>
+    <h2>${t("c_winners")}</h2>
+    ${c.adj.length ? `<div class="table-wrap"><table><tbody>${c.adj.map((a) => `<tr><td>${esc(a.nombre)}<div class="t-sub">${esc(a.nif || "")}</div></td><td class="num">${eur(a.importe)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">${t("none")}</p>`}`);
+}
+
 // ---------- Router ----------
 function route() {
   const [path, qs] = location.hash.replace(/^#/, "").split("?");
@@ -347,6 +439,10 @@ function route() {
   const view = parts[0] || "";
   document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("active", a.getAttribute("href") === "#/" + view || (a.getAttribute("href") === "#/" && !view)));
 
+  if (view === "contrato") {
+    if (!app.dataset.view) { app.innerHTML = viewHome(); app.dataset.view = "home"; }
+    return loadContratos().then(() => showContrato(parts[1]));
+  }
   if (view === "proyecto" || view === "beneficiario") {
     if (!app.dataset.view) { app.innerHTML = viewHome(); app.dataset.view = "home"; }
     return view === "proyecto" ? showProject(parts[1]) : showBenef(decodeURIComponent(parts[1] || ""));
@@ -359,6 +455,10 @@ function route() {
     state.page = 0;
     app.innerHTML = viewProjects(); bindProjects();
   } else if (view === "beneficiarios") { app.innerHTML = viewBenef(); bindBenef(); }
+  else if (view === "contratos") {
+    app.innerHTML = `<p class="muted">${t("loading")}</p>`;
+    loadContratos().then(() => { if (app.dataset.view === "contratos") { app.innerHTML = viewContratos(); bindContratos(); } });
+  }
   else if (view === "metodologia") app.innerHTML = viewMethod();
   else if (view === "denunciar") app.innerHTML = viewReport();
   else app.innerHTML = viewHome();
@@ -368,7 +468,7 @@ function route() {
 $("#modal .close").addEventListener("click", () => $("#modal").close());
 $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") $("#modal").close(); });
 $("#modal").addEventListener("close", () => {
-  if (/^#\/(proyecto|beneficiario)\//.test(location.hash)) history.back();
+  if (/^#\/(proyecto|beneficiario|contrato)\//.test(location.hash)) history.back();
 });
 $("#lang").addEventListener("click", () => {
   lang = lang === "es" ? "en" : "es";

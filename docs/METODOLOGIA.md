@@ -25,3 +25,19 @@ API pública de la BDNS (`https://www.infosubvenciones.es/bdnstrans/api`):
 | `sin_concesiones` | Presupuesto ≥100.000 €, >18 meses y ninguna concesión publicada |
 
 Un indicador **no implica irregularidad**; sirve para priorizar la revisión.
+
+# Contratos públicos
+
+Fuente: datos abiertos de la [Plataforma de Contratación del Sector Público](https://contrataciondelsectorpublico.gob.es) (ficheros ATOM/CODICE `licitacionesPerfilesContratanteCompleto3`, anuales y mensuales). Script: `etl/fetch_contratos.py`.
+
+Un contrato se incluye si su código de financiación (`FundingProgramCode`) es `PRTR`, o si su objeto o financiación mencionan el Plan de Recuperación, PRTR, MRR o Next Generation. Hay órganos que mencionan el Plan en el objeto pero marcan "sin fondos UE": se incluyen porque el propio contrato declara la vinculación. Para cada expediente se usa la versión más reciente publicada. Los contratos menores no están en este conjunto.
+
+| Código | Regla |
+|---|---|
+| `licitador_unico` | Todas las adjudicaciones recibieron una sola oferta, en un procedimiento competitivo (no negociado, no derivado de acuerdo marco) |
+| `sin_baja` | Un solo licitador y adjudicado por ≥99,5% del presupuesto de licitación |
+| `negociado_sin_publicidad` | Procedimiento negociado sin publicidad |
+| `emergencia` | Tramitación de emergencia |
+| `supera_presupuesto` | Adjudicado > 110% del presupuesto de licitación |
+
+Importes sin IVA.

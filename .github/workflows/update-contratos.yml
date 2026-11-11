@@ -1,0 +1,45 @@
+name: Actualizar contratos
+
+on:
+  schedule:
+    - cron: "43 5 * * 1"   # lunes 05:43 UTC
+  workflow_dispatch:
+    inputs:
+      periods:
+        description: "Periodos a procesar (YYYY o YYYYMM separados por espacios). Vacío = 2021..hoy"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Restaurar caché de contratos
+        uses: actions/cache@v4
+        with:
+          path: etl/.cache/contratos
+          key: placsp-${{ github.run_id }}
+          restore-keys: placsp-
+      - name: Procesar contratos PRTR de la PLACSP
+        run: python3 etl/fetch_contratos.py ${{ inputs.periods && format('--periods {0}', inputs.periods) || '' }}
+      - name: Guardar cambios
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin main
+          git add site/data/contratos.json
+          git diff --cached --quiet && echo "Sin cambios" && exit 0
+          git commit -m "Datos: contratos PRTR $(date -u +%F)"
+          git push
