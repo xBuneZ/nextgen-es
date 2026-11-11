@@ -343,8 +343,19 @@ def build(fuentes: list[str] | None = None, force: bool = False) -> None:
             return None
 
     for r in recs:
-        lotes = [l for l in r["lotes"] if l.get("importe") and l.get("adj")]
+        lotes = [dict(l) for l in r["lotes"] if l.get("importe") and l.get("adj")]
         importe = sum(l["importe"] for l in lotes)
+        # Acuerdos marco con varios lotes o adjudicatarios: la Plataforma suele registrar a cada
+        # adjudicatario con el valor máximo del acuerdo, y sumarlos multiplica el importe. Si la suma
+        # supera el presupuesto, el contrato computa por su presupuesto y los lotes se escalan.
+        ajustado = None
+        pres = r.get("presupuesto") or 0
+        if pres and importe > pres * 1.1 and (len(lotes) > 1 or len({l.get("nif") or l["adj"] for l in lotes}) > 1):
+            ajustado = round(importe, 2)
+            f = pres / importe
+            for l in lotes:
+                l["importe"] = round(l["importe"] * f, 2)
+            importe = pres
         flags = []
         if r["proc"] == "Negociado sin publicidad":
             flags.append("negociado_sin_publicidad")
@@ -403,6 +414,7 @@ def build(fuentes: list[str] | None = None, force: bool = False) -> None:
             "fecha": max((l["fecha"] for l in lotes if l.get("fecha")), default=""),
             "ofertas": min((l["ofertas"] for l in lotes if l.get("ofertas")), default=None),
             "n_lotes": len(lotes),
+            "importe_publicado": ajustado,
             "pub": r.get("pub", ""), "plazo": plazo, "doue": r.get("doue", False), "recurrente": rec_n or None,
             "adj": sorted(({**v, "importe": round(v["importe"], 2)} for v in adjs.values()), key=lambda x: -x["importe"])[:10],
             "flags": flags,

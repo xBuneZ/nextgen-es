@@ -537,6 +537,7 @@ async function showContrato(id) {
     <div class="kpis"><div class="kpi"><b>${eur(c.importe)}</b><span>${t("c_awarded")} (${t("no_vat")})</span></div>
       <div class="kpi"><b>${eur(c.presupuesto)}</b><span>${t("c_budget")}</span></div>
       <div class="kpi"><b>${c.ofertas ?? "—"}</b><span>${t("c_offers")}</span></div></div>
+    ${c.importe_publicado ? `<p class="sub adj-note">${t("c_adjusted").replace("{x}", eur(c.importe_publicado))}</p>` : ""}
     <dl class="meta">${row("m_type", esc(c.proc))}${row("c_ctype", esc(c.tipo))}${row("m_regions", esc(c.lugar))}
       ${row("c_pub", c.pub ? esc(c.pub) + (c.doue ? " · " + t("c_doue") : "") : "")}
       ${row("c_deadline", c.plazo != null ? `${num(c.plazo)} ${t("c_days")}` : "")}
