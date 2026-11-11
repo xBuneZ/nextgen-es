@@ -93,3 +93,8 @@ En esos casos el workflow falla y los datos anteriores siguen publicados. Se pue
 # Acuerdos marco con varios adjudicatarios
 
 Cuando un contrato tiene varios lotes o adjudicatarios y la suma de lo adjudicado supera en más de un 10 % el presupuesto de licitación, casi siempre se debe a que la Plataforma registra a cada adjudicatario de un acuerdo marco con el valor máximo del acuerdo. En esos casos el contrato computa por su presupuesto, el importe de cada lote se reduce en la misma proporción y la ficha muestra la suma original publicada. El indicador «adjudicado > presupuesto» solo se aplica a contratos de un único lote y adjudicatario.
+
+# Empresas y medios propios
+
+- **Beneficiarios** suma, por NIF, las subvenciones (BDNS) y los contratos adjudicados. En los contratos compartidos entre varios adjudicatarios se cuenta el importe que corresponde a cada uno. Las personas físicas (DNI/NIE) no aparecen en la lista de empresas.
+- **Medios propios** (TRAGSA, TRAGSATEC, INECO, ISDEFE y demás entes con «M.P.» en su denominación) reciben encargos de la Administración y compran mucho material a proveedores locales. Su comportamiento no es comparable al de un ministerio o un ayuntamiento, así que el ranking los excluye por defecto. Se pueden incluir con una casilla.

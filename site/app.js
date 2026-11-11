@@ -142,6 +142,24 @@ function fillHome() {
   fetch("data/contratos/totales.json").then((r) => (r.ok ? r.json() : null)).then((d) => {
     if (!$("#cov-contr")) return;
     $("#cov-contr").textContent = d ? `${num(d.totales.adjudicados)} ${t("c_awarded_n")} · ${eurShort(d.totales.importe)} ${t("no_vat")}` : "—";
+    const box = $("#home-contr");
+    if (!d || !box) return;
+    const T = d.totales, I = d.indicadores, pct = (n) => (T.adjudicados ? Math.round((100 * n) / T.adjudicados) : 0);
+    box.innerHTML = `<h2 class="sect">${t("hc_title")}</h2>
+    <div class="cols">
+      <div class="col">${card(t("hc_kpis"), t("hc_kpis_sub"), `<p class="big">${eurShort(T.importe)}</p><p class="delta">${num(T.adjudicados)} ${t("c_awarded_n")} · ${t("no_vat")}</p>
+        <ul class="brk">
+          <li><span>${t("cflag_licitador_unico")}</span><b>${pct(I.licitador_unico || 0)}%</b></li>
+          <li><span>${t("cflag_sin_baja")}</span><b>${num(I.sin_baja || 0)}</b></li>
+          <li><span>${t("cflag_negociado_sin_publicidad")}</span><b>${num(I.negociado_sin_publicidad || 0)}</b></li>
+          <li><span>${t("cflag_plazo_corto")}</span><b>${num(I.plazo_corto || 0)}</b></li>
+        </ul>`, btn("#/contratos", t("see_all")))}</div>
+      <div class="col">${d.ranking_top ? card(t("hc_rank"), t("hc_rank_sub").replace("{m}", pctf(d.media_sin_comp || 0)), `<ol class="mini-rank">${d.ranking_top.map((r) => `<li><a href="#/contratos" data-cq="${esc(r.organo)}">${esc(prettyOrg(r.organo))}</a>
+          <span class="pbar"><span style="width:${Math.round(100 * r.pct)}%"></span></span><b>${pctf(r.pct)}</b></li>`).join("")}</ol>`, btn("#/ranking", t("nav_ranking"))) : ""}</div>
+      <div class="col">${d.destacados ? card(t("hc_cases"), t("hc_cases_sub"), `<div class="cases">${d.destacados.map((c) => `<a class="case" href="#/contrato/${encodeURIComponent(c.cid)}">
+          <span class="ct"><b>${esc(c.adj)}</b><b>${eurShort(c.importe)}</b></span><span class="sub">${esc(oneLine(c.objeto, 100))}</span>
+          <span class="sub">${esc(prettyOrg(c.organo))} · ${esc((c.fecha || "").slice(0, 4))}</span>${cflagTags(c.flags)}</a>`).join("")}</div>`) : ""}</div>
+    </div>`;
   }).catch(() => { el.textContent = "—"; });
 }
 
@@ -170,6 +188,7 @@ function viewHome() {
   return `
   <div class="hero"><h1>${esc(t("home_title"))}</h1>
     <p class="lead">${num(T.convocatorias)} ${t("k_convs")} · ${num(T.concesiones)} ${t("k_concesiones")} · BDNS</p></div>
+  <h2 class="sect">${t("hs_title")}</h2>
   <div class="cols">
     <div class="col">
       ${moneyCard(r, grant)}
@@ -195,6 +214,7 @@ function viewHome() {
       ${card(t("cases_t"), "", `<div class="cases">${cases}</div>`)}
     </div>
   </div>
+  <div id="home-contr"></div>
   `;
 }
 
@@ -275,34 +295,6 @@ function syncUrl() {
   history.replaceState(null, "", `#/proyectos${p.toString() ? "?" + p : ""}`);
 }
 
-let bState = { q: "", page: 0 };
-function viewBenef() {
-  return `<h1>${t("benef_title")}</h1>
-  <div class="filters"><input type="search" id="bq" placeholder="${esc(t("search_benef"))}" value="${esc(bState.q)}"></div>
-  <p class="muted" style="font-size:13px">${num(DB.resumen.totales.personas_fisicas_n)} ${t("k_concesiones")} (${eur(DB.resumen.totales.personas_fisicas_importe)}) → ${t("pf_note")}</p>
-  <div id="bresults"></div>`;
-}
-function renderBenefRows() {
-  const q = norm(bState.q);
-  const rows = DB.benef.filter((b) => !q || b._s.includes(q));
-  const pages = Math.max(1, Math.ceil(rows.length / PAGE));
-  const slice = rows.slice(bState.page * PAGE, (bState.page + 1) * PAGE);
-  $("#bresults").innerHTML = `<p class="count">${num(rows.length)} ${t("results")}</p>
-  <div class="table-wrap"><table><thead><tr><th>${t("c_name")}</th><th class="hide-sm">${t("c_nif")}</th><th class="num hide-sm">${t("c_convs")}</th><th class="num">${t("c_amount")}</th></tr></thead>
-  <tbody>${slice.map((b) => `<tr data-k="${esc(b.nif || b.nombre)}"><td>${esc(b.nombre)}</td><td class="hide-sm">${esc(b.nif || "")}</td><td class="num hide-sm">${num(b.n_convs)}</td><td class="num">${eur(b.importe)}</td></tr>`).join("")}</tbody></table></div>
-  ${pager(pages, bState.page)}`;
-}
-function bindBenef() {
-  $("#bq").addEventListener("input", (e) => { bState.q = e.target.value; bState.page = 0; renderBenefRows(); });
-  $("#bresults").addEventListener("click", (e) => {
-    const p = e.target.closest("button[data-p]");
-    if (p) { bState.page += Number(p.dataset.p); renderBenefRows(); window.scrollTo(0, 0); return; }
-    const tr = e.target.closest("tr[data-k]");
-    if (tr) location.hash = `#/beneficiario/${encodeURIComponent(tr.dataset.k)}`;
-  });
-  renderBenefRows();
-}
-
 function issueUrl(c) {
   const title = `[Revisión] ${c.titulo.slice(0, 120)}`;
   const body = `**Convocatoria BDNS:** ${c.id}\n**Ficha oficial:** ${c.ficha_url}\n**Órgano:** ${c.nivel2} · ${c.nivel3}\n**Importe concedido:** ${eur(c.importe)}\n\n### ¿Por qué merece revisión? / Why does it deserve scrutiny?\n\n<!-- Aporta hechos verificables y fuentes. Evita acusaciones sin pruebas. -->\n\n### Fuentes / Sources\n\n- `;
@@ -340,24 +332,6 @@ async function showProject(id) {
   $("#modal-body").addEventListener("click", (e) => {
     const tr = e.target.closest("tr[data-k]");
     if (tr) { location.hash = `#/beneficiario/${encodeURIComponent(tr.dataset.k)}`; }
-  }, { once: true });
-}
-
-function showBenef(key) {
-  const b = DB.benef.find((x) => (x.nif || x.nombre) === key);
-  if (!b) return;
-  openModal(`<h3>${esc(b.nombre)}</h3><p class="muted">${esc(b.nif || "")}</p>
-    <div class="kpis"><div class="kpi"><b>${eur(b.importe)}</b><span>${t("c_amount")}</span></div>
-      <div class="kpi"><b>${num(b.n)}</b><span>${t("c_n")}</span></div>
-      <div class="kpi"><b>${num(b.n_convs)}</b><span>${t("c_convs")}</span></div></div>
-    <h2>${t("m_convs")}</h2>
-    <div class="table-wrap"><table><tbody>${b.convs.map(([id, imp]) => {
-      const c = DB.convById.get(String(id));
-      return `<tr data-id="${esc(id)}"><td>${esc(c ? c.titulo : id)}<div class="t-sub">${esc(c ? c.nivel2 : "")}</div>${c ? flagTags(c.flags) : ""}</td><td class="num">${eur(imp)}</td></tr>`;
-    }).join("")}</tbody></table></div>`);
-  $("#modal-body").addEventListener("click", (e) => {
-    const tr = e.target.closest("tr[data-id]");
-    if (tr) location.hash = `#/proyecto/${tr.dataset.id}`;
   }, { once: true });
 }
 
@@ -551,7 +525,7 @@ async function showContrato(id) {
 
 
 // ---------- Ranking de organismos ----------
-const rstate = { tab: "contratos", q: "", amb: "", min: 20, sort: "pctNo", dir: -1 };
+const rstate = { tab: "contratos", q: "", amb: "", min: 20, sort: "pctNo", dir: -1, mp: false };
 const NOCOMP_C = ["licitador_unico", "negociado_sin_publicidad", "emergencia"];
 const NOCOMP_S = ["concesion_directa", "nominativa"];
 const RK = {};
@@ -564,7 +538,7 @@ function rankContratos() {
     if (!(c.importe > 0)) continue;
     const k = c.organo || "?";
     let a = g.get(k);
-    if (!a) g.set(k, (a = { nombre: k, sub: c.ruta || c.ambito, amb: c.ambito, n: 0, imp: 0, impNo: 0, uni: 0, neg: 0, plazo: 0, rec: 0 }));
+    if (!a) g.set(k, (a = { nombre: k, sub: c.ruta || c.ambito, amb: c.ambito, mp: MEDIO_PROPIO.test(k), n: 0, imp: 0, impNo: 0, uni: 0, neg: 0, plazo: 0, rec: 0 }));
     const no = c.flags.some((f) => NOCOMP_C.includes(f));
     a.n++; a.imp += c.importe; if (no) a.impNo += c.importe;
     if (c.flags.includes("licitador_unico")) a.uni++;
@@ -618,6 +592,7 @@ function viewRanking() {
     <input type="search" id="rq" placeholder="${esc(t("rank_search"))}" value="${esc(rstate.q)}">
     <select id="ramb">${opt("", t("all_admins"), rstate.amb)}${ambs.map((a) => opt(a, a, rstate.amb)).join("")}</select>
     <select id="rmin" aria-label="${esc(t("rank_min"))}">${[1, 5, 10, 20, 50, 100].map((n) => opt(n, `${t("rank_min")}: ${n}`, rstate.min)).join("")}</select>
+    ${isC ? `<label class="chk"><input type="checkbox" id="rmp" ${rstate.mp ? "checked" : ""}> ${t("rank_mp")}</label>` : ""}
   </div>
   <div id="rresults"></div>
   <p class="disclaimer">${esc(t(isC ? "rank_note_c" : "rank_note_s"))}</p>`;
@@ -627,7 +602,7 @@ function renderRanking() {
   const isC = rstate.tab === "contratos";
   const R = isC ? rankContratos() : rankSubvenciones();
   const q = norm(rstate.q);
-  const rows = R.rows.filter((r) => r.n >= rstate.min && (!rstate.amb || r.amb === rstate.amb) && (!q || norm(r.nombre + " " + r.sub).includes(q)));
+  const rows = R.rows.filter((r) => r.n >= rstate.min && (!rstate.amb || r.amb === rstate.amb) && (rstate.mp || !r.mp) && (!q || norm(r.nombre + " " + r.sub).includes(q)));
   const k = rstate.sort, d = rstate.dir;
   rows.sort((a, b) => (a[k] > b[k] ? d : a[k] < b[k] ? -d : b.imp - a.imp));
   const th = (key, l, cls = "num") => `<th class="${cls}" data-sort="${key}">${esc(l)}${rstate.sort === key ? (rstate.dir < 0 ? " ↓" : " ↑") : ""}</th>`;
@@ -642,7 +617,7 @@ function renderRanking() {
   $("#rresults").innerHTML = `<p class="count">${num(rows.length)} ${t("rank_bodies")}</p>
   <div class="table-wrap"><table><thead><tr><th class="hide-sm">#</th>${th("nombre", t("rank_body"), "")}${cols}</tr></thead>
   <tbody>${rows.slice(0, 200).map((r, i) => `<tr data-org="${esc(r.nombre)}"><td class="hide-sm muted">${i + 1}</td>
-    <td class="t-title">${esc(r.nombre)}<div class="t-sub">${esc(r.sub || "")}</div></td>${cells(r)}</tr>`).join("")}</tbody></table></div>`;
+    <td class="t-title">${esc(r.nombre)}<div class="t-sub">${esc(r.sub || "")}${r.mp ? ` · <span class="mp">${t("rank_mp_tag")}</span>` : ""}</div></td>${cells(r)}</tr>`).join("")}</tbody></table></div>`;
 }
 
 function bindRanking() {
@@ -650,6 +625,7 @@ function bindRanking() {
   $("#rq").addEventListener("input", (e) => { rstate.q = e.target.value; renderRanking(); });
   $("#ramb").addEventListener("input", (e) => { rstate.amb = e.target.value; renderRanking(); });
   $("#rmin").addEventListener("input", (e) => { rstate.min = Number(e.target.value); renderRanking(); });
+  if ($("#rmp")) $("#rmp").addEventListener("change", (e) => { rstate.mp = e.target.checked; renderRanking(); });
   $("#rresults").addEventListener("click", (e) => {
     const s = e.target.closest("th[data-sort]");
     if (s) { const key = s.dataset.sort; rstate.dir = rstate.sort === key ? -rstate.dir : -1; rstate.sort = key; renderRanking(); return; }
@@ -725,6 +701,133 @@ function explainBlock(kind, ref, c, organo, isAGE) {
     </details></section>`;
 }
 
+
+// ---------- Empresas: subvenciones + contratos ----------
+const MEDIO_PROPIO = /\bM\.\s?P\.|medio propio|\bTRAGSA|TRAGSATEC/i;
+const EMP = { loading: null, rows: null };
+function loadEmpresas() {
+  if (!EMP.loading) {
+    EMP.loading = fetch("data/contratos/empresas.json").then((r) => (r.ok ? r.json() : [])).catch(() => []).then((list) => {
+      const m = new Map();
+      for (const b of DB.benef) {
+        const k = (b.nif || b.nombre).toUpperCase();
+        m.set(k, { key: b.nif || b.nombre, nombre: b.nombre, nif: b.nif || "", sub: b.importe, nsub: b.n_convs, con: 0, ncon: 0, nno: 0, impno: 0, orgs: [] });
+      }
+      for (const [nif, nombre, n, imp, nno, impno, orgs] of list) {
+        const k = (nif || nombre).toUpperCase();
+        const e = m.get(k) || { key: nif || nombre, nombre, nif, sub: 0, nsub: 0 };
+        Object.assign(e, { con: imp, ncon: n, nno, impno, orgs });
+        m.set(k, e);
+      }
+      EMP.rows = [...m.values()];
+      EMP.rows.forEach((e) => { e.total = e.sub + e.con; e.pctNo = e.con ? e.impno / e.con : -1; e._s = norm(e.nombre + " " + e.nif); });
+      EMP.byKey = new Map(EMP.rows.map((e) => [String(e.key).toUpperCase(), e]));
+      return EMP.rows;
+    });
+  }
+  return EMP.loading;
+}
+
+let bState = { q: "", page: 0, sort: "total", dir: -1 };
+function viewBenef() {
+  return `<div class="hero"><h1>${t("benef_title")}</h1><p class="lead">${esc(t("benef_lead"))}</p></div>
+  <div class="filters"><input type="search" id="bq" placeholder="${esc(t("search_benef"))}" value="${esc(bState.q)}"></div>
+  <p class="muted" style="font-size:13px">${num(DB.resumen.totales.personas_fisicas_n)} ${t("k_concesiones")} (${eur(DB.resumen.totales.personas_fisicas_importe)}) → ${t("pf_note")}</p>
+  <div id="bresults"><p class="muted">${t("loading")}</p></div>`;
+}
+function renderBenefRows() {
+  const q = norm(bState.q);
+  const rows = EMP.rows.filter((b) => !q || b._s.includes(q));
+  const k = bState.sort, d = bState.dir;
+  rows.sort((a, b) => (a[k] > b[k] ? d : a[k] < b[k] ? -d : 0));
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE));
+  bState.page = Math.min(bState.page, pages - 1);
+  const th = (key, l, cls = "num") => `<th class="${cls}" data-sort="${key}">${esc(l)}${bState.sort === key ? (bState.dir < 0 ? " ↓" : " ↑") : ""}</th>`;
+  $("#bresults").innerHTML = `<p class="count">${num(rows.length)} ${t("results")}</p>
+  <div class="table-wrap"><table><thead><tr>${th("nombre", t("c_name"), "")}${th("sub", t("b_grants"), "num hide-sm")}${th("con", t("b_contracts"), "num hide-sm")}${th("pctNo", t("b_nocomp"), "num hide-sm")}${th("total", t("b_total"))}</tr></thead>
+  <tbody>${rows.slice(bState.page * PAGE, (bState.page + 1) * PAGE).map((b) => `<tr data-k="${esc(b.key)}">
+    <td class="t-title">${esc(b.nombre)}<div class="t-sub">${esc(b.nif || "")}</div></td>
+    <td class="num hide-sm">${b.sub ? eurShort(b.sub) : "—"}</td>
+    <td class="num hide-sm">${b.con ? eurShort(b.con) + `<span class="sub">${num(b.ncon)} ${t("b_n_contracts")}</span>` : "—"}</td>
+    <td class="num hide-sm">${b.pctNo >= 0 ? pctf(b.pctNo) : "—"}</td>
+    <td class="num"><b>${eurShort(b.total)}</b></td></tr>`).join("")}</tbody></table></div>
+  ${pager(pages, bState.page)}`;
+}
+function bindBenef() {
+  loadEmpresas().then(() => {
+    if (!$("#bresults")) return;
+    $("#bq").addEventListener("input", (e) => { bState.q = e.target.value; bState.page = 0; renderBenefRows(); });
+    $("#bresults").addEventListener("click", (e) => {
+      const s = e.target.closest("th[data-sort]");
+      if (s) { const key = s.dataset.sort; bState.dir = bState.sort === key ? -bState.dir : -1; bState.sort = key; renderBenefRows(); return; }
+      const p = e.target.closest("button[data-p]");
+      if (p) { bState.page += Number(p.dataset.p); renderBenefRows(); window.scrollTo(0, 0); return; }
+      const tr = e.target.closest("tr[data-k]");
+      if (tr) location.hash = `#/beneficiario/${encodeURIComponent(tr.dataset.k)}`;
+    });
+    renderBenefRows();
+  });
+}
+
+async function showBenef(key) {
+  openModal(`<p class="muted">${t("loading")}</p>`);
+  await loadEmpresas();
+  const e = EMP.byKey.get(String(key).toUpperCase());
+  const b = DB.benef.find((x) => (x.nif || x.nombre) === key);
+  if (!e && !b) return openModal(`<p class="muted">${t("none")}</p>`);
+  const nombre = (e || b).nombre, nif = (e || b).nif || "";
+  const grants = b ? b.convs.map(([id, imp]) => {
+    const c = DB.convById.get(String(id));
+    return `<tr data-id="${esc(id)}"><td>${esc(c ? c.titulo : id)}<div class="t-sub">${esc(c ? c.nivel2 : "")}</div>${c ? flagTags(c.flags) : ""}</td><td class="num">${eur(imp)}</td></tr>`;
+  }).join("") : "";
+  openModal(`<h3>${esc(nombre)}</h3><p class="muted">${esc(nif)}</p>
+    <div class="kpis">
+      <div class="kpi"><b>${eurShort(e ? e.total : b.importe)}</b><span>${t("b_total")}</span></div>
+      <div class="kpi"><b>${eurShort(b ? b.importe : 0)}</b><span>${t("b_grants")} · ${num(b ? b.n_convs : 0)} ${t("k_convs")}</span></div>
+      <div class="kpi"><b>${eurShort(e ? e.con : 0)}</b><span>${t("b_contracts")} · ${num(e ? e.ncon : 0)}</span></div>
+      ${e && e.con ? `<div class="kpi"><b>${pctf(e.pctNo)}</b><span>${t("b_nocomp_long")}</span></div>` : ""}
+    </div>
+    ${grants ? `<h2>${t("m_convs")}</h2><div class="table-wrap"><table><tbody>${grants}</tbody></table></div>` : ""}
+    <div id="b-contr">${e && e.con ? `<h2>${t("b_contracts_won")}</h2><p class="muted">${t("loading")}</p>` : ""}</div>`);
+  if (e && e.con) {
+    await loadContratos();
+    const k = (nif || nombre).toUpperCase();
+    const mine = CT.data.contratos.filter((c) => c.adj.some((a) => (a.nif || a.nombre).toUpperCase() === k)).sort((x, y) => y.importe - x.importe);
+    const box = $("#b-contr");
+    if (box) box.innerHTML = `<h2>${t("b_contracts_won")}</h2><div class="table-wrap"><table><tbody>${mine.slice(0, 40).map((c) => `<tr data-cid="${encodeURIComponent(c.cid)}">
+      <td>${esc(c.objeto || c.exp)}<div class="t-sub">${[c.organo, c.fecha, c.adj.length > 1 ? t("b_shared") : ""].filter(Boolean).map(esc).join(" · ")}</div>${cflagTags(c.flags)}</td><td class="num">${eur(c.importe)}</td></tr>`).join("")}</tbody></table></div>
+      ${mine.length > 40 ? `<p class="sub">${t("b_more").replace("{n}", num(mine.length - 40))}</p>` : ""}`;
+  }
+}
+
+// ---------- Buscador global ----------
+function viewSearch(q) {
+  return `<div class="hero"><h1>${t("search_title")}: «${esc(q)}»</h1></div><div id="sres"><p class="muted">${t("loading")}</p></div>`;
+}
+async function runSearch(q) {
+  const nq = norm(q);
+  const box = () => $("#sres");
+  const sec = (title, n, items, more) => `<section class="card sres"><div class="card-head"><h2>${esc(title)} <span class="muted">${num(n)}</span></h2>${n && more ? more : ""}</div>${n ? `<ul class="slist">${items}</ul>` : `<p class="muted">${t("search_none")}</p>`}</section>`;
+  const projs = DB.convs.filter((c) => c._s.includes(nq)).sort((a, b) => b.importe - a.importe);
+  await loadEmpresas();
+  const emps = EMP.rows.filter((e) => e._s.includes(nq)).sort((a, b) => b.total - a.total);
+  const render = (contr, orgs) => {
+    if (!box()) return;
+    box().innerHTML = `<div class="cols">
+      <div class="col">${sec(t("nav_benef"), emps.length, emps.slice(0, 8).map((e) => `<li><a href="#/beneficiario/${encodeURIComponent(e.key)}">${esc(e.nombre)}</a><span>${eurShort(e.total)}</span></li>`).join(""), `<a class="btn-sm" href="#/beneficiarios" data-bq="${esc(q)}">${t("see_all")}</a>`)}
+        ${sec(t("search_orgs"), orgs ? orgs.length : 0, (orgs || []).slice(0, 8).map((o) => `<li><a href="#/contratos" data-cq="${esc(o.nombre)}">${esc(o.nombre)}</a><span>${num(o.n)} ${t("b_n_contracts")}</span></li>`).join(""), "")}</div>
+      <div class="col">${sec(t("nav_projects"), projs.length, projs.slice(0, 8).map((c) => `<li><a href="#/proyecto/${c.id}">${esc(oneLine(c.titulo, 110))}</a><span>${eurShort(c.importe)}</span></li>`).join(""), `<a class="btn-sm" href="#/proyectos?q=${encodeURIComponent(q)}">${t("see_all")}</a>`)}</div>
+      <div class="col">${contr ? sec(t("nav_contracts"), contr.length, contr.slice(0, 8).map((c) => `<li><a href="#/contrato/${encodeURIComponent(c.cid)}">${esc(oneLine(c.objeto, 110))}</a><span>${eurShort(c.importe)}</span></li>`).join(""), `<a class="btn-sm" href="#/contratos" data-cq="${esc(q)}">${t("see_all")}</a>`) : `<section class="card sres"><h2>${t("nav_contracts")}</h2><p class="muted">${t("loading")}</p></section>`}</div>
+    </div>`;
+  };
+  render(null, null);
+  await loadTextos();
+  const contr = CT.data.contratos.filter((c) => c._s.includes(nq)).sort((a, b) => b.importe - a.importe);
+  const og = new Map();
+  for (const c of CT.data.contratos) if (norm(c.organo).includes(nq)) { const o = og.get(c.organo) || { nombre: c.organo, n: 0 }; o.n++; og.set(c.organo, o); }
+  render(contr, [...og.values()].sort((a, b) => b.n - a.n));
+}
+
 // ---------- Router ----------
 function route() {
   const [path, qs] = location.hash.replace(/^#/, "").split("?");
@@ -758,6 +861,11 @@ function route() {
     const go = () => { if (app.dataset.view === "ranking") { app.innerHTML = viewRanking(); bindRanking(); } };
     if (rstate.tab === "contratos") { app.innerHTML = `<p class="muted">${t("loading")}</p>`; loadContratos().then(go); } else go();
   }
+  else if (view === "buscar") {
+    const q = new URLSearchParams(qs || "").get("q") || "";
+    app.innerHTML = viewSearch(q);
+    runSearch(q);
+  }
   else if (view === "metodologia") app.innerHTML = viewMethod();
   else if (view === "denunciar") app.innerHTML = viewReport();
   else app.innerHTML = viewHome();
@@ -774,6 +882,10 @@ $("#modal").addEventListener("close", () => {
   else location.hash = m[1] === "contrato" ? "#/contratos" : m[1] === "beneficiario" ? "#/beneficiarios" : "#/proyectos";
 });
 $("#modal-body").addEventListener("click", (e) => {
+  const tc = e.target.closest("tr[data-cid]");
+  if (tc) { location.hash = `#/contrato/${tc.dataset.cid}`; return; }
+  const tp = e.target.closest("#modal-body tr[data-id]");
+  if (tp && location.hash.startsWith("#/beneficiario/")) { location.hash = `#/proyecto/${tp.dataset.id}`; return; }
   const b = e.target.closest("button.copy");
   if (!b) return;
   const ta = b.parentElement.querySelector("textarea");
@@ -787,10 +899,17 @@ $("#lang").addEventListener("click", () => {
   applyI18n(); delete $("#app").dataset.view; route();
 });
 window.addEventListener("hashchange", () => { inApp = true; route(); });
+// Enlaces que abren Contratos o Beneficiarios ya filtrados
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("a[data-cq], a[data-bq]");
+  if (!a) return;
+  if (a.dataset.cq != null) Object.assign(cstate, { q: a.dataset.cq, proc: "", ambito: "", flag: "", page: 0 });
+  if (a.dataset.bq != null) Object.assign(bState, { q: a.dataset.bq, page: 0 });
+});
 $("#hsearch").addEventListener("submit", (e) => {
   e.preventDefault();
   const q = $("#hq").value.trim();
-  location.hash = `#/proyectos${q ? "?q=" + encodeURIComponent(q) : ""}`;
+  if (q) location.hash = `#/buscar?q=${encodeURIComponent(q)}`;
 });
 
 load().then(() => { applyI18n(); route(); }).catch((e) => {

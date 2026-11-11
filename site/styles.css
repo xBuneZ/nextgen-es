@@ -251,3 +251,24 @@ h3.mini { font-size: 13px; font-weight: 600; margin: 18px 0 0; color: var(--mute
 .cov li.no b { color: var(--warn-fg); }
 .cov .lost { display: block; color: var(--warn-fg); background: var(--warn-bg); border-radius: 8px; padding: 6px 8px; margin: 6px 0; font-weight: 600; }
 .cov li a { display: inline-block; margin-top: 2px; }
+
+/* Bloque 2: portada de contratos, búsqueda, ranking */
+h2.sect { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 8px 0 12px; }
+#home-contr h2.sect { margin-top: 40px; }
+.mini-rank { list-style: none; padding: 0; margin: 14px 0 0; display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
+.mini-rank li { display: grid; grid-template-columns: minmax(0, 1fr) 70px 44px; gap: 10px; align-items: center; }
+.mini-rank a { color: var(--text); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini-rank a:hover { text-decoration: underline; }
+.mini-rank .pbar { margin: 0; width: 100%; }
+.mini-rank b { text-align: right; }
+.slist { list-style: none; padding: 0; margin: 10px 0 0; font-size: 13px; }
+.slist li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+.slist li:first-child { border-top: 0; }
+.slist li a { color: var(--text); text-decoration: none; min-width: 0; }
+.slist li a:hover { text-decoration: underline; }
+.slist li span { color: var(--muted); white-space: nowrap; }
+.sres h2 span { font-weight: 400; font-size: 14px; }
+.chk { display: flex; align-items: center; gap: 8px; font-size: 14px; padding: 0 4px; }
+.chk input { width: 18px; height: 18px; }
+.mp { color: var(--warn-fg); }
+.ct b:last-child { white-space: nowrap; }
