@@ -131,6 +131,14 @@ function moneyCard(r, grant) {
 function fillHome() {
   const el = $("#cov-contr");
   if (!el) return;
+  fetch("data/referencia.json").then((r) => (r.ok ? r.json() : null)).then((ref) => {
+    const li = $("#cov-ref");
+    if (!ref || !li) return;
+    li.innerHTML = `<b>${t("ref_title")}</b><span>${t("ref_alloc").replace("{a}", eurShort(ref.subvenciones_asignadas))}
+      ${ref.subvenciones_perdidas ? `<strong class="lost">${t("ref_lost").replace("{p}", eurShort(ref.subvenciones_perdidas))}</strong>` : ""}
+      <a href="${esc(ref.url)}" target="_blank" rel="noopener">${t("ref_source")} ↗</a></span>`;
+    li.hidden = false;
+  }).catch(() => {});
   fetch("data/contratos/totales.json").then((r) => (r.ok ? r.json() : null)).then((d) => {
     if (!$("#cov-contr")) return;
     $("#cov-contr").textContent = d ? `${num(d.totales.adjudicados)} ${t("c_awarded_n")} · ${eurShort(d.totales.importe)} ${t("no_vat")}` : "—";
@@ -176,6 +184,7 @@ function viewHome() {
       ${card(t("cov_t"), t("cov_sub"), `<ul class="cov">
         <li><b>${t("cov_grants")}</b><span>${num(T.convocatorias)} ${t("k_convs")} · ${eurShort(T.importe)} ${t("cov_gross")}</span></li>
         <li><b>${t("cov_contracts")}</b><span id="cov-contr">${t("loading")}</span></li>
+        <li id="cov-ref" hidden></li>
         <li class="no"><b>${t("cov_missing")}</b><span>${t("cov_missing_list")}</span></li></ul>`, btn("#/metodologia", t("nav_method")))}
       ${card(t("what_t"), t("what_sub"), `<div class="hbars">${fines.map((f, k) => `<a href="#/proyectos?q=${encodeURIComponent(f.nombre)}"><span class="hl"><span>${esc(f.nombre)}</span><span class="sub">${eurShort(f.importe)}</span></span>
         <span class="track"><span style="width:${(100 * f.importe) / fmax}%;background:${COLORS[k % 3]}"></span></span></a>`).join("")}</div>`)}

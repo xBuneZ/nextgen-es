@@ -85,3 +85,7 @@ Los procesos de actualización **no publican** si:
 - **Subvenciones:** el número de convocatorias o de concesiones cae más de un 5 %.
 
 En esos casos el workflow falla y los datos anteriores siguen publicados. Se puede forzar con `--force` tras revisarlo.
+
+# Referencia: lo asignado por la UE
+
+`site/data/referencia.json` recoge, con su fuente, lo que la Comisión Europea asigna a España: 79.854.183.024 € en subvenciones del Mecanismo de Recuperación. También recoge la reducción de 197.971.828 € del quinto pago (Decisión de 3 de agosto de 2026, art. 24.8 del Reglamento 2021/241). Fuente: propuesta COM(2026) 435, de 7 de agosto de 2026, considerandos 23 a 25. Los préstamos (83.160 M€ disponibles en 2023, que la propuesta reduce a 21.449 M€ porque España no los ha solicitado) no se suman, porque se devuelven.

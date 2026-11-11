@@ -249,3 +249,5 @@ h3.mini { font-size: 13px; font-weight: 600; margin: 18px 0 0; color: var(--mute
 .cov li { display: flex; flex-direction: column; gap: 2px; }
 .cov li span { color: var(--muted); }
 .cov li.no b { color: var(--warn-fg); }
+.cov .lost { display: block; color: var(--warn-fg); background: var(--warn-bg); border-radius: 8px; padding: 6px 8px; margin: 6px 0; font-weight: 600; }
+.cov li a { display: inline-block; margin-top: 2px; }
