@@ -467,6 +467,65 @@ def trozo(cid: str) -> int:
     return h % N_TROZOS
 
 
+# Medios propios (TRAGSA, INECO, ISDEFE…): hacen encargos para la Administración y compran
+# mucho material a proveedores locales; su comportamiento no es comparable al de un ministerio
+# o un ayuntamiento, así que el ranking los muestra aparte.
+MEDIO_PROPIO = re.compile(r"\bM\.\s?P\.|medio propio|\bTRAGSA|TRAGSATEC", re.I)
+NOCOMP = ("licitador_unico", "negociado_sin_publicidad", "emergencia")
+PERSONA = re.compile(r"^[0-9XYZKLM]\d{7}[A-Z]$")
+
+
+def portada(contratos: list[dict]) -> dict:
+    """Casos destacados del último año y los organismos con más importe sin competencia."""
+    desde = (dt.date.today() - dt.timedelta(days=365)).isoformat()
+    fuertes = ("sin_baja", "negociado_sin_publicidad", "plazo_corto", "ganador_recurrente")
+    dest = sorted((c for c in contratos if (c.get("fecha") or "") >= desde and c["importe"] >= 1_000_000
+                   and any(f in c["flags"] for f in fuertes) and c.get("adj")), key=lambda c: -c["importe"])[:6]
+    g, imp, imp_no = {}, 0.0, 0.0
+    for c in contratos:
+        if not c["importe"] or MEDIO_PROPIO.search(c.get("organo") or ""):
+            continue
+        no = any(f in c["flags"] for f in NOCOMP)
+        a = g.setdefault(c["organo"], {"organo": c["organo"], "ambito": c.get("ambito", ""), "n": 0, "importe": 0.0, "sin_comp": 0.0})
+        a["n"] += 1
+        a["importe"] += c["importe"]
+        a["sin_comp"] += c["importe"] if no else 0
+        imp += c["importe"]
+        imp_no += c["importe"] if no else 0
+    rk = [a for a in g.values() if a["n"] >= 20]
+    for a in rk:
+        a["pct"] = round(a["sin_comp"] / a["importe"], 4) if a["importe"] else 0
+    rk.sort(key=lambda a: (-a["pct"], -a["importe"]))
+    return {
+        "destacados": [{"cid": cid_de(c), "objeto": re.sub(r"\s+", " ", c["objeto"])[:140], "organo": c["organo"],
+                        "adj": c["adj"][0]["nombre"], "importe": round(c["importe"]), "fecha": c.get("fecha"), "flags": c["flags"]}
+                       for c in dest],
+        "ranking_top": [{k: (round(v) if k in ("importe", "sin_comp") else v) for k, v in a.items()} for a in rk[:6]],
+        "media_sin_comp": round(imp_no / imp, 4) if imp else 0,
+    }
+
+
+def empresas(contratos: list[dict]) -> list:
+    """Adjudicatarios agregados (sin personas físicas): [nif, nombre, contratos, importe,
+    contratos sin competencia, importe sin competencia, [organismos principales]]."""
+    agg = {}
+    for c in contratos:
+        no = any(f in c["flags"] for f in NOCOMP)
+        for a in c.get("adj", []):
+            nif = (a.get("nif") or "").upper()
+            if PERSONA.match(nif):
+                continue
+            e = agg.setdefault(nif or a["nombre"].upper(), {"nif": nif, "nombre": a["nombre"], "n": 0, "imp": 0.0, "nno": 0, "impno": 0.0, "org": defaultdict(float)})
+            e["n"] += 1
+            e["imp"] += a.get("importe") or 0
+            e["nno"] += no
+            e["impno"] += (a.get("importe") or 0) if no else 0
+            e["org"][c.get("organo") or ""] += a.get("importe") or 0
+    top = sorted(agg.values(), key=lambda e: -e["imp"])[:8000]
+    return [[e["nif"], e["nombre"], e["n"], round(e["imp"]), e["nno"], round(e["impno"]),
+             [o for o, _ in sorted(e["org"].items(), key=lambda kv: -kv[1])[:3]]] for e in top]
+
+
 def write_split(out: dict) -> None:
     """Escribe site/data/contratos/indice.json (lo que necesitan listado, búsqueda
     y ranking, con textos repetidos en diccionarios) y det/NN.json (fichas completas)."""
@@ -506,7 +565,8 @@ def write_split(out: dict) -> None:
     dump = lambda path, obj: path.write_text(json.dumps(obj, ensure_ascii=False, separators=(",", ":")))
     dump(DIR / "indice.json", {**meta, "n_trozos": N_TROZOS, "dic": dic, "cols": cols})
     dump(DIR / "textos.json", textos)
-    dump(DIR / "totales.json", meta)  # pequeño: lo usa la portada sin cargar el índice  # objeto de cada contrato (mismo orden); solo lo carga el listado
+    dump(DIR / "totales.json", {**meta, **portada(out["contratos"])})  # pequeño: lo usa la portada
+    dump(DIR / "empresas.json", empresas(out["contratos"]))  # objeto de cada contrato (mismo orden); solo lo carga el listado
     for i, t in enumerate(trozos):
         dump(DIR / "det" / f"{i:02d}.json", t)
     (OUT / "contratos.json").unlink(missing_ok=True)  # formato antiguo, de un solo fichero
