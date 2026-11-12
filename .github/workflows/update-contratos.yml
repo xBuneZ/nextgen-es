@@ -9,6 +9,10 @@ on:
         description: "Periodos a procesar (YYYYMM separados por espacios). Vacío = 2021..hoy"
         required: false
         default: ""
+      fuentes:
+        description: "Fuentes: placsp (Plataforma del Estado), agr (plataformas autonómicas), emp (encargos a medios propios)"
+        required: false
+        default: "placsp agr emp"
 
 permissions:
   contents: write
@@ -38,7 +42,7 @@ jobs:
           key: placsp-${{ github.run_id }}
           restore-keys: placsp-
       - name: Procesar contratos PRTR (Plataforma de Contratación y plataformas autonómicas)
-        run: python3 etl/fetch_contratos.py ${{ inputs.periods && format('--periods {0}', inputs.periods) || '' }}
+        run: python3 etl/fetch_contratos.py ${{ inputs.periods && format('--periods {0}', inputs.periods) || '' }} --fuentes ${{ inputs.fuentes || 'placsp agr emp' }}
       - name: Temas, tipos de organización y cadena del dinero
         run: pip install openpyxl && python3 etl/derivados.py
       - name: Publicar
