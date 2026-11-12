@@ -38,7 +38,7 @@ jobs:
       - name: Restaurar caché de contratos temas.json tipos.json cadena.json
         uses: actions/cache@v6
         with:
-          path: etl/.cache/contratos temas.json tipos.json cadena.json
+          path: etl/.cache/contratos
           key: placsp-${{ github.run_id }}
           restore-keys: placsp-
       - name: Procesar contratos PRTR (Plataforma de Contratación y plataformas autonómicas)
