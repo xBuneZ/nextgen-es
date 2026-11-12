@@ -45,7 +45,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - run: python3 etl/fetch_contratos.py --periods ${{ matrix.month }} --fuentes ${{ inputs.fuentes }} --refresh-last 1 --no-build
+      - run: python3 etl/fetch_contratos.py --periods ${{ matrix.month }} --fuentes $(echo "${{ inputs.fuentes }}" | sed 's/\bemp\b//g') --refresh-last 1 --no-build
       - uses: actions/upload-artifact@v7
         with:
           name: contratos-${{ matrix.month }}
@@ -77,6 +77,9 @@ jobs:
           pattern: contratos-*
           path: etl/.cache/contratos
           merge-multiple: true
+      - name: Encargos a medios propios (ficheros anuales)
+        if: contains(inputs.fuentes, 'emp')
+        run: python3 etl/fetch_contratos.py --fuentes emp --refresh-last 0 --no-build
       - run: ls etl/.cache/contratos | wc -l && python3 etl/fetch_contratos.py --build-only
       - name: Guardar caché de contratos
         uses: actions/cache/save@v6

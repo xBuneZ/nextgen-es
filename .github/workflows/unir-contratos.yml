@@ -1,0 +1,50 @@
+name: Unir carga de contratos
+
+# Rehace solo el paso final de una «Carga histórica de contratos» ya descargada:
+# reutiliza sus artefactos (un fichero por mes), añade los encargos a medios propios,
+# une todo, recalcula los derivados, guarda la caché y publica.
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Id de la ejecución de «Carga histórica de contratos» cuyos meses se reutilizan"
+        required: true
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  unir:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Datos publicados (rama datos)
+        uses: actions/checkout@v7
+        with:
+          ref: datos
+          path: site/data
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: contratos-*
+          path: etl/.cache/contratos
+          merge-multiple: true
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Encargos a medios propios
+        run: python3 etl/fetch_contratos.py --fuentes emp --refresh-last 0 --no-build
+      - run: ls etl/.cache/contratos | wc -l && python3 etl/fetch_contratos.py --build-only
+      - name: Guardar caché de contratos
+        uses: actions/cache/save@v6
+        with:
+          path: etl/.cache/contratos
+          key: placsp-${{ github.run_id }}
+      - name: Temas, tipos de organización y cadena del dinero
+        run: pip install openpyxl && python3 etl/derivados.py
+      - name: Publicar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: etl/publicar_datos.sh "Contratos PRTR, carga histórica $(date -u +%F)" contratos temas.json tipos.json cadena.json bruselas.json
