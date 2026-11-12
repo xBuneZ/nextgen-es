@@ -506,7 +506,7 @@ def portada(contratos: list[dict]) -> dict:
 
 
 def empresas(contratos: list[dict]) -> list:
-    """Adjudicatarios agregados (sin personas físicas): [nif, nombre, contratos, importe,
+    """Todos los adjudicatarios agregados (sin personas físicas): [nif, nombre, contratos, importe,
     contratos sin competencia, importe sin competencia, [organismos principales]]."""
     agg = {}
     for c in contratos:
@@ -521,7 +521,7 @@ def empresas(contratos: list[dict]) -> list:
             e["nno"] += no
             e["impno"] += (a.get("importe") or 0) if no else 0
             e["org"][c.get("organo") or ""] += a.get("importe") or 0
-    top = sorted(agg.values(), key=lambda e: -e["imp"])[:8000]
+    top = sorted(agg.values(), key=lambda e: -e["imp"])  # todas: la lista completa pesa poco
     return [[e["nif"], e["nombre"], e["n"], round(e["imp"]), e["nno"], round(e["impno"]),
              [o for o, _ in sorted(e["org"].items(), key=lambda kv: -kv[1])[:3]]] for e in top]
 

@@ -196,7 +196,24 @@ def indice_beneficiarios(entidades, max_bytes: int = 250_000) -> None:
     print(f"  índice de beneficiarios: {len(filas)} entidades en {len(finales) + len(por_nif)} trozos", file=sys.stderr)
 
 
+POR_PAGINA = 200
+DIR_PAG = OUT / "convocatorias" / "benef"
+
+
+def paginas_beneficiarios(num, top) -> int:
+    """convocatorias/benef/<id>/<n>.json: [[nombre, nif, importe, nº concesiones], …] por importe."""
+    d = DIR_PAG / str(num)
+    d.mkdir(parents=True, exist_ok=True)
+    paginas = [top[i:i + POR_PAGINA] for i in range(0, len(top), POR_PAGINA)]
+    for i, pag in enumerate(paginas):
+        (d / f"{i}.json").write_text(json.dumps([[b["nombre"], b["nif"] or "", round(b["importe"], 2), b["n"]] for b in pag],
+                                                ensure_ascii=False, separators=(",", ":")))
+    return len(paginas)
+
+
 def build(records: list[dict], force: bool = False) -> None:
+    import shutil
+    shutil.rmtree(DIR_PAG, ignore_errors=True)
     today = dt.date.today()
     convs_out = []
     benef = {}  # key -> dict
@@ -255,6 +272,10 @@ def build(records: list[dict], force: bool = False) -> None:
             pb["n"] += 1
 
         top = sorted(per_benef.values(), key=lambda x: -x["importe"])
+        # Lista completa de beneficiarios (entidades) en páginas, para la ficha de la convocatoria
+        n_pag = 0
+        if len(top) > 25:
+            n_pag = paginas_beneficiarios(num, top)
         n_benef = len(per_benef) + (1 if pf_n else 0)
 
         # --- Indicadores objetivos (NO implican irregularidad) ---
@@ -296,6 +317,7 @@ def build(records: list[dict], force: bool = False) -> None:
             "regiones": [r.get("descripcion", "").strip() for r in det.get("regiones") or []][:5],
             "bases_url": det.get("urlBasesReguladoras") or "",
             "top": [{"nombre": b["nombre"], "nif": b["nif"], "importe": r2(b["importe"]), "n": b["n"]} for b in top[:25]],
+            "n_paginas": n_pag, "n_entidades": len(top),
             "flags": flags,
         })
 

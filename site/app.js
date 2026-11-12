@@ -335,16 +335,29 @@ async function showProject(id) {
       ${row("m_pf", c.pf_n ? `${num(c.pf_n)} · ${eur(c.pf_importe)}` : "")}
       ${row("m_official", `<a href="${esc(c.ficha_url)}" target="_blank" rel="noopener">infosubvenciones.es ↗</a>`)}
       ${c.bases_url ? row("m_bases", `<a href="${esc(c.bases_url)}" target="_blank" rel="noopener">${esc(t("m_bases"))} ↗</a>`) : ""}</dl>
-    <h2>${t("m_topb")}</h2>
-    ${c.top.length ? `<div class="table-wrap"><table><tbody>${c.top.map((b) => `<tr data-k="${esc(b.nif || b.nombre)}"><td>${esc(b.nombre)}<div class="t-sub">${esc(b.nif || "")}</div></td><td class="num">${eur(b.importe)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">${t("none")}</p>`}
+    ${c.n_paginas ? `<h2>${t("m_allb").replace("{n}", num(c.n_entidades))}</h2><div id="cb-list" data-conv="${esc(c.id)}" data-pages="${c.n_paginas}"><p class="muted">${t("loading")}</p></div>`
+      : `<h2>${t("m_topb")}</h2>${c.top.length ? `<div class="table-wrap"><table><tbody>${c.top.map((b) => `<tr data-k="${esc(b.nif || b.nombre)}"><td>${esc(b.nombre)}<div class="t-sub">${esc(b.nif || "")}</div></td><td class="num">${eur(b.importe)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">${t("none")}</p>`}`}
     ${explainBlock("s", "s:" + c.id, c, c.nivel3 || c.nivel2, c.nivel1 === "ESTADO")}
     <h2>${t("m_signal")}</h2>
     <a class="btn-sm" href="${issueUrl(c)}" target="_blank" rel="noopener">${t("m_signal_btn")} ↗</a>
     ${shareBlock(t("share_s").replace("{o}", prettyOrg(c.nivel3 || c.nivel2)).replace("{i}", eurShort(c.importe)).replace("{t}", oneLine(c.titulo, 90)) + (c.flags.length ? ` (${shareFlags(c.flags, "flag_")})` : "") + ". " + t("share_tail"), "#/proyecto/" + c.id)}`);
-  $("#modal-body").addEventListener("click", (e) => {
-    const tr = e.target.closest("tr[data-k]");
-    if (tr) { location.hash = `#/beneficiario/${encodeURIComponent(tr.dataset.k)}`; }
-  }, { once: true });
+  if (c.n_paginas) convBenefPage(0);
+}
+
+// Lista completa de beneficiarios de una convocatoria, 200 por página, cargadas bajo demanda
+async function convBenefPage(i) {
+  const box = $("#cb-list");
+  if (!box) return;
+  const id = box.dataset.conv, pages = Number(box.dataset.pages);
+  i = Math.max(0, Math.min(pages - 1, i));
+  box.innerHTML = `<p class="muted">${t("loading")}</p>`;
+  const rows = await fetch(`data/convocatorias/benef/${id}/${i}.json`).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+  if (!$("#cb-list") || $("#cb-list").dataset.conv !== id) return;
+  const pager = pages > 1 ? `<div class="pager"><button type="button" data-bp="${i - 1}" ${i === 0 ? "disabled" : ""}>${t("prev")}</button>
+    <span>${t("page")} ${i + 1} / ${num(pages)}</span><button type="button" data-bp="${i + 1}" ${i >= pages - 1 ? "disabled" : ""}>${t("next")}</button></div>` : "";
+  box.innerHTML = `${pager}<div class="table-wrap"><table><tbody>${rows.map(([nombre, nif, imp, n], k) => `<tr data-k="${esc(nif || nombre)}">
+    <td class="muted">${num(i * 200 + k + 1)}</td><td>${esc(nombre)}<div class="t-sub">${esc(nif)}${n > 1 ? ` · ${num(n)} ${t("k_concesiones")}` : ""}</div></td><td class="num">${eur(imp)}</td></tr>`).join("")}</tbody></table></div>${pager}`;
+  if (i > 0 || pages > 1) box.scrollIntoView({ block: "start" });
 }
 
 // ---------- Compartir ----------
@@ -1006,6 +1019,10 @@ $("#modal-body").addEventListener("click", (e) => {
     cl.textContent = t("sol_copied");
     return;
   }
+  const bp = e.target.closest("button[data-bp]");
+  if (bp) { convBenefPage(Number(bp.dataset.bp)); return; }
+  const tk = e.target.closest("#modal-body tr[data-k]");
+  if (tk && location.hash.startsWith("#/proyecto/")) { location.hash = `#/beneficiario/${encodeURIComponent(tk.dataset.k)}`; return; }
   const tc = e.target.closest("tr[data-cid]");
   if (tc) { location.hash = `#/contrato/${tc.dataset.cid}`; return; }
   const tp = e.target.closest("#modal-body tr[data-id]");
