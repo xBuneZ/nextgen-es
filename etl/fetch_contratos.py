@@ -408,7 +408,7 @@ def build(fuentes: list[str] | None = None, force: bool = False) -> None:
             adjs.setdefault(k, {"nombre": l["adj"], "nif": l["nif"], "importe": 0.0})["importe"] += l["importe"]
         contratos.append({
             "exp": r["exp"], "url": r["url"], "objeto": r["objeto"][:300], "tipo": r["tipo"], "cpv": r["cpv"],
-            "lugar": r["lugar"], "organo": r["organo"], "ambito": ambito, "ruta": " › ".join(r["sup"][1:4]),
+            "lugar": r["lugar"], "organo": r["organo"], "organo_nif": (r.get("organo_nif") or "").upper(), "ambito": ambito, "ruta": " › ".join(r["sup"][1:4]),
             "proc": r["proc"], "estado": r["estado"],
             "presupuesto": r.get("presupuesto") or 0, "importe": round(importe, 2),
             "fecha": max((l["fecha"] for l in lotes if l.get("fecha")), default=""),
