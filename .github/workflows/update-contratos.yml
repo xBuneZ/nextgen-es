@@ -1,4 +1,4 @@
-name: Actualizar contratos
+name: Actualizar contratos temas.json tipos.json cadena.json
 
 on:
   schedule:
@@ -14,7 +14,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: update-contratos
+  group: update-contratos temas.json tipos.json cadena.json
   cancel-in-progress: false
 
 jobs:
@@ -31,15 +31,17 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - name: Restaurar caché de contratos
+      - name: Restaurar caché de contratos temas.json tipos.json cadena.json
         uses: actions/cache@v6
         with:
-          path: etl/.cache/contratos
+          path: etl/.cache/contratos temas.json tipos.json cadena.json
           key: placsp-${{ github.run_id }}
           restore-keys: placsp-
       - name: Procesar contratos PRTR (Plataforma de Contratación y plataformas autonómicas)
         run: python3 etl/fetch_contratos.py ${{ inputs.periods && format('--periods {0}', inputs.periods) || '' }}
+      - name: Temas, tipos de organización y cadena del dinero
+        run: python3 etl/derivados.py
       - name: Publicar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: etl/publicar_datos.sh "Contratos PRTR $(date -u +%F)" contratos
+        run: etl/publicar_datos.sh "Contratos PRTR $(date -u +%F)" contratos temas.json tipos.json cadena.json

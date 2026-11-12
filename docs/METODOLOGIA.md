@@ -98,3 +98,37 @@ Cuando un contrato tiene varios lotes o adjudicatarios y la suma de lo adjudicad
 
 - **Beneficiarios** suma, por NIF, las subvenciones (BDNS) y los contratos adjudicados. En los contratos compartidos entre varios adjudicatarios se cuenta el importe que corresponde a cada uno. Las personas físicas (DNI/NIE) no aparecen en la lista de empresas.
 - **Medios propios** (TRAGSA, TRAGSATEC, INECO, ISDEFE y demás entes con «M.P.» en su denominación) reciben encargos de la Administración y compran mucho material a proveedores locales. Su comportamiento no es comparable al de un ministerio o un ayuntamiento, así que el ranking los excluye por defecto. Se pueden incluir con una casilla.
+
+# Temas
+
+Cada convocatoria tiene una **finalidad oficial** asignada por quien la publica en la BDNS (suma el 100 %). Además, se agrupan por **temas transversales** con reglas sobre el título, revisadas a mano y públicas en `etl/temas.json`. Una convocatoria puede estar en varios temas.
+
+La migración no tiene convocatorias Next Gen propias: las entidades que trabajan con migrantes (CEPAIM, ACCEM, CEAR…) reciben fondos de convocatorias generales de inclusión social y tercer sector, agrupadas en ese tema.
+
+# Tipos de organización
+
+Se deducen de la primera letra del NIF:
+
+| Letras | Tipo |
+|---|---|
+| A, B, C, D | Empresas |
+| F | Cooperativas |
+| G | Asociaciones y fundaciones |
+| R | Entidades religiosas |
+| E, H, J | Comunidades de bienes y de propietarios, sociedades civiles |
+| P, Q, S | Administraciones y entes públicos |
+| U | Uniones temporales de empresas |
+| N, W | Entidades extranjeras |
+
+Las personas físicas solo aparecen agregadas.
+
+# Cadena del dinero
+
+Para cada administración o ente público que recibe subvenciones Next Gen (NIF P, Q o S, desde 50.000 €) se compara:
+
+- **Recibido:** subvenciones Next Gen publicadas en la BDNS con la entidad como beneficiaria.
+- **Repartido:** sus propias convocatorias marcadas como MRR. Se emparejan por tipo de entidad (ayuntamiento, consell comarcal, diputación, cabildo, mancomunidad, comunidad autónoma) y nombre del lugar.
+- **Contratado:** contratos del Plan de Recuperación con su NIF como órgano de contratación.
+- **Sin destino publicado:** recibido − repartido − contratado.
+
+La diferencia no implica que el dinero haya desaparecido: puede ser personal propio, cofinanciación, gasto pendiente o gasto publicado sin la marca del Plan. Las comunidades autónomas reciben la mayor parte de sus fondos por transferencias que no constan como subvención, y las universidades y organismos de investigación ejecutan directamente, por eso no se incluyen en la vista por defecto.

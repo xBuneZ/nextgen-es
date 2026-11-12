@@ -34,7 +34,9 @@ jobs:
           restore-keys: bdns-
       - name: Descargar datos de la BDNS
         run: python3 etl/fetch_bdns.py --workers 6 --refresh-days 365
+      - name: Temas, tipos de organización y cadena del dinero
+        run: python3 etl/derivados.py
       - name: Publicar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: etl/publicar_datos.sh "Subvenciones BDNS $(date -u +%F)" resumen.json convocatorias.json convocatorias beneficiarios.json benef_idx
+        run: etl/publicar_datos.sh "Subvenciones BDNS $(date -u +%F)" resumen.json convocatorias.json convocatorias beneficiarios.json benef_idx temas.json tipos.json cadena.json

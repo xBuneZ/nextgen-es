@@ -25,7 +25,7 @@ const num = (n) => new Intl.NumberFormat(locale(), { useGrouping: "always" }).fo
 const norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
 const DB = { resumen: null, convs: [], benef: [], convById: new Map() };
-const state = { q: "", admin: "", flag: "", tipo: "", min: "", sort: "importe", dir: -1, page: 0 };
+const state = { q: "", admin: "", flag: "", tipo: "", min: "", tema: "", fin: "", sort: "importe", dir: -1, page: 0 };
 
 async function load() {
   const [r, c, b] = await Promise.all(["resumen", "convocatorias", "beneficiarios"].map((f) => fetch(`data/${f}.json`).then((x) => x.json())));
@@ -36,6 +36,9 @@ async function load() {
     x._s = norm([x.titulo, x.nivel2, x.nivel3, x.id, ...x.top.map((b) => b.nombre + " " + (b.nif || ""))].join(" "));
   }
   for (const x of b) x._s = norm(x.nombre + " " + (x.nif || ""));
+  DB.temas = await fetch("data/temas.json").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  DB.temaIds = new Map();
+  if (DB.temas) [...DB.temas.transversales, ...DB.temas.oficiales].forEach((x) => DB.temaIds.set(x.id || "fin:" + x.nombre, new Set(x.ids)));
 }
 
 function applyI18n() {
@@ -224,6 +227,8 @@ function filteredConvs() {
     (!q || c._s.includes(q) || (state.extraIds && state.extraIds.has(String(c.id)))) &&
     (!state.admin || c.nivel1 === state.admin) &&
     (!state.tipo || c.tipo === state.tipo) &&
+    (!state.tema || (DB.temaIds.get(state.tema) || new Set()).has(String(c.id))) &&
+    (!state.fin || c.finalidad === state.fin) &&
     flagMatch(c.flags, state.flag) &&
     c.importe >= min);
   const k = state.sort, d = state.dir;
@@ -240,6 +245,8 @@ function viewProjects() {
     <input type="search" id="q" placeholder="${esc(t("search_projects"))}" value="${esc(state.q)}">
     <select id="admin">${opt("", t("all_admins"), state.admin)}${admins.map((a) => opt(a, a, state.admin)).join("")}</select>
     <select id="tipo">${opt("", t("all_types"), state.tipo)}${tipos.map((a) => opt(a, a, state.tipo)).join("")}</select>
+    ${DB.temas ? `<select id="tema">${opt("", t("all_temas"), state.tema)}${DB.temas.transversales.map((x) => opt(x.id, lang === "es" ? x.nombre : x.en, state.tema)).join("")}</select>
+    <select id="fin">${opt("", t("all_fin"), state.fin)}${DB.temas.oficiales.map((x) => opt(x.nombre, x.nombre, state.fin)).join("")}</select>` : ""}
     <input type="number" id="min" min="0" step="10000" placeholder="${esc(t("min_amount"))}" value="${esc(state.min)}" style="width:170px">
   </div>
   ${chipBar("chips", FLAGS, "flag", DB.resumen.indicadores, state.flag)}
@@ -283,7 +290,7 @@ function bindProjects() {
   };
   $("#q").addEventListener("input", (e) => { state.q = e.target.value; upd(); refresh(); });
   refresh();
-  ["admin", "tipo", "min"].forEach((id) => $("#" + id).addEventListener("input", (e) => { state[id] = e.target.value; upd(); }));
+  ["admin", "tipo", "min", "tema", "fin"].forEach((id) => $("#" + id) && $("#" + id).addEventListener("input", (e) => { state[id] = e.target.value; upd(); }));
   const setFlag = (v) => { state.flag = v; $("#chips").outerHTML = chipBar("chips", FLAGS, "flag", DB.resumen.indicadores, v); bindChips(); upd(); };
   const bindChips = () => $("#chips").addEventListener("click", (e) => { const b = e.target.closest("button[data-f]"); if (b) setFlag(b.dataset.f ? toggleFlag(state.flag, b.dataset.f) : ""); });
   bindChips();
@@ -302,7 +309,7 @@ function bindProjects() {
 
 function syncUrl() {
   const p = new URLSearchParams();
-  for (const k of ["q", "admin", "flag", "tipo", "min"]) if (state[k]) p.set(k, state[k]);
+  for (const k of ["q", "admin", "flag", "tipo", "min", "tema", "fin"]) if (state[k]) p.set(k, state[k]);
   history.replaceState(null, "", `#/proyectos${p.toString() ? "?" + p : ""}`);
 }
 
@@ -837,17 +844,21 @@ function loadEmpresas() {
   return EMP.loading;
 }
 
-let bState = { q: "", page: 0, sort: "total", dir: -1 };
+let bState = { q: "", page: 0, sort: "total", dir: -1, tipo: "" };
 function viewBenef() {
   return `<div class="hero"><h1>${t("benef_title")}</h1><p class="lead">${esc(t("benef_lead"))}</p></div>
-  <div class="filters"><input type="search" id="bq" placeholder="${esc(t("search_benef"))}" value="${esc(bState.q)}"></div>
+  <div id="tipos-box"></div>
+  <div class="filters"><input type="search" id="bq" placeholder="${esc(t("search_benef"))}" value="${esc(bState.q)}">
+    <select id="btipo"><option value="">${t("tipos_all")}</option></select></div>
   <p class="muted" style="font-size:13px">${num(DB.resumen.totales.personas_fisicas_n)} ${t("k_concesiones")} (${eur(DB.resumen.totales.personas_fisicas_importe)}) → ${t("pf_note")}</p>
   <div id="bresults"><p class="muted">${t("loading")}</p></div>`;
 }
 function renderBenefRows() {
-  syncHash("#/beneficiarios", { q: bState.q });
+  syncHash("#/beneficiarios", { q: bState.q, tipo: bState.tipo });
   const q = norm(bState.q);
-  const rows = mergeEmp(EMP.rows.filter((b) => !q || b._s.includes(q)), q.length >= 3 ? bState.extra || [] : []);
+  const base = bState.tipo ? tipoRows(bState.tipo) : EMP.rows;
+  const rows = mergeEmp(base.filter((b) => !q || b._s.includes(q)), q.length >= 3 ? bState.extra || [] : [])
+    .filter((b) => !bState.tipo || tipoDe(b.nif) === bState.tipo);
   const k = bState.sort, d = bState.dir;
   rows.sort((a, b) => (a[k] > b[k] ? d : a[k] < b[k] ? -d : 0));
   const pages = Math.max(1, Math.ceil(rows.length / PAGE));
@@ -872,6 +883,15 @@ function bindBenef() {
       benefSearch(q0).then((rows) => { if (bState.q === q0 && $("#bresults")) { bState.extra = rows; renderBenefRows(); } });
     };
     $("#bq").addEventListener("input", (e) => { bState.q = e.target.value; bState.page = 0; renderBenefRows(); refresh(); });
+    loadTipos().then((d) => {
+      if (!d || !$("#btipo")) return;
+      $("#btipo").innerHTML = `<option value="">${t("tipos_all")}</option>` + d.tipos.map((x) => `<option value="${x.id}" ${bState.tipo === x.id ? "selected" : ""}>${esc(lang === "es" ? x.nombre : x.en)}</option>`).join("");
+      $("#tipos-box").innerHTML = tiposCard();
+      const setT = (v) => { bState.tipo = v; bState.page = 0; $("#btipo").value = v; $("#tipos-box").innerHTML = tiposCard(); renderBenefRows(); };
+      $("#btipo").addEventListener("input", (e) => setT(e.target.value));
+      $("#tipos-box").addEventListener("click", (e) => { const tr = e.target.closest("tr[data-tipo]"); if (tr) setT(bState.tipo === tr.dataset.tipo ? "" : tr.dataset.tipo); });
+      renderBenefRows();
+    });
     refresh();
     $("#bresults").addEventListener("click", (e) => {
       const s = e.target.closest("th[data-sort]");
@@ -951,6 +971,143 @@ async function runSearch(q) {
   render(contr, [...og.values()].sort((a, b) => b.n - a.n));
 }
 
+
+// ---------- Temas ----------
+function viewTemas() {
+  const T = DB.temas;
+  if (!T) return `<h1>${t("nav_temas")}</h1><p class="notice">${t("contracts_none")}</p>`;
+  const nm = (x) => (lang === "es" ? x.nombre : x.en || x.nombre);
+  const max = Math.max(...T.oficiales.map((x) => x.importe), 1);
+  return `<div class="hero"><h1>${t("temas_title")}</h1><p class="lead">${esc(t("temas_lead"))}</p></div>
+  <h2 class="sect">${t("temas_trans")}</h2>
+  <div class="tema-grid">${T.transversales.map((x) => `<section class="card tema">
+    <div class="card-head"><h2>${esc(nm(x))}</h2><a class="btn-sm" href="#/proyectos?tema=${x.id}">${t("see_projects")}</a></div>
+    <p class="big">${eurShort(x.importe)} <small>${pctf(x.pct)} ${t("temas_of_total")}</small></p>
+    <p class="sub">${num(x.n)} ${t("k_convs")} · ${eurShort(x.importe_asoc_fund)} ${t("temas_to_assoc")}</p>
+    <ol class="tema-top">${x.top.slice(0, 5).map((r) => `<li><a href="#/beneficiario/${encodeURIComponent(r[1] || r[0])}">${esc(r[0])}</a><span>${eurShort(r[2])}</span></li>`).join("")}</ol>
+  </section>`).join("")}</div>
+  <h2 class="sect">${t("temas_official")}</h2>
+  <section class="card"><p class="sub">${esc(t("temas_official_note"))}</p><div class="hbars">${T.oficiales.map((x) => `<a href="#/proyectos?fin=${encodeURIComponent(x.nombre)}"><span class="hl"><span>${esc(x.nombre)}</span><span class="sub">${eurShort(x.importe)} · ${pctf(x.pct)}</span></span>
+    <span class="track"><span style="width:${(100 * x.importe) / max}%;background:var(--c1)"></span></span></a>`).join("")}</div></section>
+  <p class="disclaimer">${t("temas_method")} <a href="https://github.com/${REPO}/blob/main/etl/temas.json" target="_blank" rel="noopener">etl/temas.json ↗</a></p>`;
+}
+
+// ---------- Tipos de organización ----------
+const TIPOS = { data: null, loading: null };
+function loadTipos() {
+  if (!TIPOS.loading) TIPOS.loading = fetch("data/tipos.json").then((r) => (r.ok ? r.json() : null)).catch(() => null).then((d) => (TIPOS.data = d));
+  return TIPOS.loading;
+}
+const tipoDe = (nif) => {
+  const l = (nif || "").slice(0, 1).toUpperCase();
+  const t = TIPOS.data && TIPOS.data.tipos.find((x) => l && x.letras.includes(l));
+  return t ? t.id : "otras";
+};
+function tiposCard() {
+  const d = TIPOS.data;
+  if (!d) return "";
+  const nm = (x) => (lang === "es" ? x.nombre : x.en);
+  return `<section class="card tipos-card"><div class="card-head"><h2>${t("tipos_title")}</h2></div>
+    <div class="table-wrap flat"><table><thead><tr><th>${t("tipos_type")}</th><th class="num">${t("b_grants")}</th><th class="num hide-sm">${t("tipos_n")}</th><th class="num">${t("b_contracts")}</th></tr></thead>
+    <tbody>${d.tipos.filter((x) => x.sub_importe || x.con_importe).map((x) => `<tr data-tipo="${x.id}" class="${bState.tipo === x.id ? "sel" : ""}"><td>${esc(nm(x))}</td><td class="num">${eurShort(x.sub_importe)}</td><td class="num hide-sm">${num(x.sub_n)}</td><td class="num">${eurShort(x.con_importe)}</td></tr>`).join("")}
+    <tr class="muted"><td>${t("tb_pf")}</td><td class="num">${eurShort(d.personas_fisicas.importe)}</td><td class="num hide-sm">${num(d.personas_fisicas.n)} ${t("k_concesiones")}</td><td class="num">—</td></tr></tbody></table></div></section>`;
+}
+function tipoRows(id) {
+  const tt = TIPOS.data && TIPOS.data.tipos.find((x) => x.id === id);
+  if (!tt) return [];
+  const m = new Map();
+  for (const e of EMP.rows) if (tipoDe(e.nif) === id) m.set(String(e.key).toUpperCase(), e);
+  const add = (nombre, nif, imp, n, kind) => {
+    const k = String(nif || nombre).toUpperCase();
+    if (m.has(k)) return;
+    const e = { key: nif || nombre, nombre, nif, sub: 0, nsub: 0, con: 0, ncon: 0, nno: 0, impno: 0, pctNo: -1 };
+    if (kind === "s") Object.assign(e, { sub: imp, nsub: n }); else Object.assign(e, { con: imp, ncon: n });
+    e.total = e.sub + e.con; e._s = norm(nombre + " " + nif);
+    m.set(k, e);
+  };
+  tt.sub_top.forEach(([n, nif, imp, k]) => add(n, nif, imp, k, "s"));
+  tt.con_top.forEach(([n, nif, imp, k]) => add(n, nif, imp, k, "c"));
+  return [...m.values()];
+}
+
+// ---------- Cadena del dinero ----------
+const CAD = { data: null, loading: null };
+const cadState = { q: "", tipo: "locales", sort: "sin_rastro", dir: -1 };
+const CAD_LOCALES = ["ayuntamiento", "comarca", "diputacion", "cabildo", "mancomunidad", "local"];
+function loadCadena() {
+  if (!CAD.loading) CAD.loading = fetch("data/cadena.json").then((r) => (r.ok ? r.json() : null)).catch(() => null).then((d) => {
+    if (d) { d.byNif = new Map(d.entidades.map((e) => [e.nif, e])); d.entidades.forEach((e) => { e._s = norm(e.nombre + " " + e.nif); e.pct = e.recibido ? e.sin_rastro / e.recibido : 0; }); }
+    return (CAD.data = d);
+  });
+  return CAD.loading;
+}
+function viewCadena() {
+  const opt = (v, l) => `<option value="${v}" ${cadState.tipo === v ? "selected" : ""}>${esc(l)}</option>`;
+  return `<div class="hero"><h1>${t("cad_title")}</h1><p class="lead">${esc(t("cad_lead"))}</p></div>
+  <div class="notice">${t("cad_caveat")}</div>
+  <div class="filters">
+    <input type="search" id="kq" placeholder="${esc(t("cad_search"))}" value="${esc(cadState.q)}">
+    <select id="ktipo">${opt("locales", t("cad_t_locales"))}${["ayuntamiento", "comarca", "diputacion", "cabildo", "mancomunidad", "ccaa", "organismo"].map((k) => opt(k, t("cad_t_" + k))).join("")}${opt("", t("cad_t_all"))}</select>
+  </div>
+  <div id="kresults"><p class="muted">${t("loading")}</p></div>`;
+}
+function renderCadena() {
+  syncHash("#/cadena", { q: cadState.q, tipo: cadState.tipo === "locales" ? "" : cadState.tipo || "todas" });
+  const q = norm(cadState.q);
+  const rows = CAD.data.entidades.filter((e) => (!q || e._s.includes(q)) &&
+    (cadState.tipo === "locales" ? CAD_LOCALES.includes(e.tipo) : !cadState.tipo || e.tipo === cadState.tipo));
+  const k = cadState.sort, d = cadState.dir;
+  rows.sort((a, b) => (a[k] > b[k] ? d : a[k] < b[k] ? -d : 0));
+  const th = (key, l, cls = "num") => `<th class="${cls}" data-sort="${key}">${esc(l)}${cadState.sort === key ? (cadState.dir < 0 ? " ↓" : " ↑") : ""}</th>`;
+  const tot = rows.reduce((s, e) => s + e.sin_rastro, 0);
+  $("#kresults").innerHTML = `<p class="count">${num(rows.length)} ${t("cad_entities")} · ${eurShort(tot)} ${t("cad_no_trace_total")}</p>
+  <div class="table-wrap"><table><thead><tr>${th("nombre", t("cad_entity"), "")}${th("recibido", t("cad_received"))}${th("repartido", t("cad_granted"), "num hide-sm")}${th("contratado", t("cad_contracted"), "num hide-sm")}${th("sin_rastro", t("cad_no_trace"))}</tr></thead>
+  <tbody>${rows.slice(0, 300).map((e) => `<tr data-nif="${esc(e.nif)}"><td class="t-title">${esc(e.nombre)}<div class="t-sub">${esc(e.nif)} · ${t("cad_t_" + e.tipo)}</div></td>
+    <td class="num">${eurShort(e.recibido)}</td><td class="num hide-sm">${e.repartido ? eurShort(e.repartido) : "—"}</td><td class="num hide-sm">${e.contratado ? eurShort(e.contratado) : "—"}</td>
+    <td class="num"><b>${eurShort(e.sin_rastro)}</b><span class="sub">${pctf(e.pct)} ${t("cad_of_received")}</span></td></tr>`).join("")}</tbody></table></div>
+  ${rows.length > 300 ? `<p class="sub">${t("cad_more")}</p>` : ""}`;
+}
+function bindCadena() {
+  loadCadena().then((d) => {
+    if (!$("#kresults")) return;
+    if (!d) { $("#kresults").innerHTML = `<p class="notice">${t("contracts_none")}</p>`; return; }
+    $("#kq").addEventListener("input", (e) => { cadState.q = e.target.value; renderCadena(); });
+    $("#ktipo").addEventListener("input", (e) => { cadState.tipo = e.target.value; renderCadena(); });
+    $("#kresults").addEventListener("click", (e) => {
+      const s = e.target.closest("th[data-sort]");
+      if (s) { const key = s.dataset.sort; cadState.dir = cadState.sort === key ? -cadState.dir : -1; cadState.sort = key; renderCadena(); return; }
+      const tr = e.target.closest("tr[data-nif]");
+      if (tr) location.hash = `#/entidad/${encodeURIComponent(tr.dataset.nif)}`;
+    });
+    renderCadena();
+  });
+}
+async function showEntidad(nif) {
+  openModal(`<p class="muted">${t("loading")}</p>`);
+  const d = await loadCadena();
+  const e = d && d.byNif.get(decodeURIComponent(nif));
+  if (!e) return openModal(`<p class="muted">${t("none")}</p>`);
+  const conv = (id) => DB.convById.get(String(id));
+  const lst = (rows, fn) => rows.length ? `<div class="table-wrap"><table><tbody>${rows.map(fn).join("")}</tbody></table></div>` : `<p class="muted">${t("cad_none_pub")}</p>`;
+  const txt = `Al amparo de la Ley 19/2013, de 9 de diciembre, de transparencia, acceso a la información pública y buen gobierno (o la normativa autonómica aplicable), solicito a ${prettyOrg(e.nombre)} (NIF ${e.nif}) información sobre el destino de los fondos del Plan de Recuperación, Transformación y Resiliencia (Mecanismo de Recuperación y Resiliencia) recibidos en las siguientes convocatorias, por un importe total publicado en la Base de Datos Nacional de Subvenciones de ${eur(e.recibido)}:\n\n${e.recibidas.map(([id, imp]) => `- BDNS ${id}: ${oneLine((conv(id) || {}).titulo || "", 160)} (${eur(imp)})`).join("\n")}\n\nEn concreto, solicito:\n\n1. Relación de gastos, contratos, convenios, encargos y subvenciones concedidas con cargo a dichos fondos, con sus perceptores finales e importes.\n2. Gastos de personal propio imputados a estos fondos.\n3. Importe ejecutado, pagado y pendiente de ejecución a fecha de hoy, y en su caso reintegros.\n4. Motivo por el que dichos gastos no constan publicados en la BDNS o en la Plataforma de Contratación del Sector Público con la marca del Plan de Recuperación.\n\nSolicito que la información se facilite por medios electrónicos.`;
+  openModal(`<h3>${esc(e.nombre)}</h3><p class="muted">${esc(e.nif)} · ${t("cad_t_" + e.tipo)}</p>
+    <div class="kpis">
+      <div class="kpi"><b>${eurShort(e.recibido)}</b><span>${t("cad_received")}</span></div>
+      <div class="kpi"><b>${eurShort(e.repartido)}</b><span>${t("cad_granted")}</span></div>
+      <div class="kpi"><b>${eurShort(e.contratado)}</b><span>${t("cad_contracted")}</span></div>
+      <div class="kpi warn"><b>${eurShort(e.sin_rastro)}</b><span>${t("cad_no_trace")}</span></div>
+    </div>
+    <p class="sub">${esc(d.nota)}</p>
+    <h2>1. ${t("cad_h_received")}</h2>${lst(e.recibidas, ([id, imp]) => `<tr data-id="${esc(id)}"><td>${esc((conv(id) || {}).titulo || id)}<div class="t-sub">${esc((conv(id) || {}).nivel3 || "")}</div></td><td class="num">${eur(imp)}</td></tr>`)}
+    <h2>2. ${t("cad_h_granted")}</h2>${lst(e.propias, ([id, imp]) => `<tr data-id="${esc(id)}"><td>${esc((conv(id) || {}).titulo || id)}</td><td class="num">${eur(imp)}</td></tr>`)}
+    <h2>3. ${t("cad_h_contracted")}</h2>${lst(e.contratos, ([cid, imp, adj]) => `<tr data-cid="${encodeURIComponent(cid)}"><td>${esc(adj || "—")}</td><td class="num">${eur(imp)}</td></tr>`)}
+    <section class="explain"><h2>${t("sol_title")}</h2><details><summary class="btn">${t("sol_btn")}</summary>
+      <ol class="steps"><li>${t("sol_step1")}<textarea class="req" readonly rows="12">${esc(txt)}</textarea><button type="button" class="btn-sm copy">${t("sol_copy")}</button></li>
+      <li>${t("sol_step2")} <a href="https://duckduckgo.com/?q=${encodeURIComponent("portal transparencia solicitud acceso información " + prettyOrg(e.nombre))}" target="_blank" rel="noopener">${t("sol_where_other").replace("{o}", esc(prettyOrg(e.nombre)))} ↗</a><span class="sub">${t("sol_deadline")}</span></li></ol></details></section>
+    ${shareBlock(t("share_cad").replace("{o}", prettyOrg(e.nombre)).replace("{r}", eurShort(e.recibido)).replace("{s}", eurShort(e.sin_rastro)) + " " + t("share_tail"), "#/entidad/" + encodeURIComponent(e.nif))}`);
+  // las filas de convocatorias abren su ficha
+}
+
 // ---------- Router ----------
 function route() {
   const [path, qs] = location.hash.replace(/^#/, "").split("?");
@@ -963,6 +1120,10 @@ function route() {
     if (!app.dataset.view) { app.innerHTML = viewHome(); app.dataset.view = "home"; }
     return loadContratos().then(() => showContrato(parts[1]));
   }
+  if (view === "entidad") {
+    if (!app.dataset.view) { app.innerHTML = viewHome(); app.dataset.view = "home"; }
+    return showEntidad(parts[1]);
+  }
   if (view === "proyecto" || view === "beneficiario") {
     if (!app.dataset.view) { app.innerHTML = viewHome(); app.dataset.view = "home"; }
     return view === "proyecto" ? showProject(parts[1]) : showBenef(decodeURIComponent(parts[1] || ""));
@@ -971,11 +1132,11 @@ function route() {
   app.dataset.view = view || "home";
   if (view === "proyectos") {
     const p = new URLSearchParams(qs || "");
-    for (const k of ["q", "admin", "flag", "tipo", "min"]) state[k] = p.get(k) || "";
+    for (const k of ["q", "admin", "flag", "tipo", "min", "tema", "fin"]) state[k] = p.get(k) || "";
     state.page = 0;
     app.innerHTML = viewProjects(); bindProjects();
   } else if (view === "beneficiarios") {
-    bState.q = new URLSearchParams(qs || "").get("q") || ""; bState.page = 0;
+    const bp = new URLSearchParams(qs || ""); bState.q = bp.get("q") || ""; bState.tipo = bp.get("tipo") || ""; bState.page = 0;
     app.innerHTML = viewBenef(); bindBenef();
   }
   else if (view === "contratos") {
@@ -996,6 +1157,12 @@ function route() {
     app.innerHTML = viewSearch(q);
     runSearch(q);
   }
+  else if (view === "temas") app.innerHTML = viewTemas();
+  else if (view === "cadena") {
+    const p = new URLSearchParams(qs || "");
+    cadState.q = p.get("q") || ""; cadState.tipo = p.get("tipo") === "todas" ? "" : p.get("tipo") || "locales";
+    app.innerHTML = viewCadena(); bindCadena();
+  }
   else if (view === "metodologia") app.innerHTML = viewMethod();
   else if (view === "denunciar") app.innerHTML = viewReport();
   else app.innerHTML = viewHome();
@@ -1006,10 +1173,10 @@ $("#modal .close").addEventListener("click", () => $("#modal").close());
 $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") $("#modal").close(); });
 let inApp = false;
 $("#modal").addEventListener("close", () => {
-  const m = location.hash.match(/^#\/(proyecto|beneficiario|contrato)\//);
+  const m = location.hash.match(/^#\/(proyecto|beneficiario|contrato|entidad)\//);
   if (!m) return;
   if (inApp) history.back();
-  else location.hash = m[1] === "contrato" ? "#/contratos" : m[1] === "beneficiario" ? "#/beneficiarios" : "#/proyectos";
+  else location.hash = m[1] === "contrato" ? "#/contratos" : m[1] === "beneficiario" ? "#/beneficiarios" : m[1] === "entidad" ? "#/cadena" : "#/proyectos";
 });
 $("#modal-body").addEventListener("click", (e) => {
   const cl = e.target.closest("button.copylink");
@@ -1026,7 +1193,7 @@ $("#modal-body").addEventListener("click", (e) => {
   const tc = e.target.closest("tr[data-cid]");
   if (tc) { location.hash = `#/contrato/${tc.dataset.cid}`; return; }
   const tp = e.target.closest("#modal-body tr[data-id]");
-  if (tp && location.hash.startsWith("#/beneficiario/")) { location.hash = `#/proyecto/${tp.dataset.id}`; return; }
+  if (tp && (location.hash.startsWith("#/beneficiario/") || location.hash.startsWith("#/entidad/"))) { location.hash = `#/proyecto/${tp.dataset.id}`; return; }
   const b = e.target.closest("button.copy");
   if (!b) return;
   const ta = b.parentElement.querySelector("textarea");

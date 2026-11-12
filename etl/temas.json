@@ -1,0 +1,131 @@
+{
+  "_nota": "Temas transversales de las convocatorias. Una convocatoria entra en un tema si su título (sin tildes, en minúsculas) cumple «incluir» y no cumple «excluir». «forzar» y «quitar» corrigen a mano convocatorias concretas (códigos BDNS). Una convocatoria puede estar en varios temas. La migración no tiene convocatorias Next Gen propias: las entidades que trabajan con migrantes reciben fondos de convocatorias generales de inclusión social y tercer sector, que se agrupan en ese tema.",
+  "temas": [
+    {
+      "id": "digitalizacion",
+      "nombre": "Digitalización de empresas",
+      "en": "Business digitalisation",
+      "incluir": "kit digital|kit consulting|digitaliza|transformacion digital|red\\.es|agentes del cambio|ciberseguridad|competencias digitales|capacidades digitales",
+      "excluir": "",
+      "forzar": [],
+      "quitar": []
+    },
+    {
+      "id": "energia",
+      "nombre": "Autoconsumo, renovables y eficiencia energética",
+      "en": "Self-consumption, renewables and energy efficiency",
+      "incluir": "autoconsumo|renovable|almacenamiento|eficiencia energetica|fotovoltaic|biogas|hidrogeno|geotermi|aerotermi|energia termica|comunidades energeticas|bomba de calor",
+      "excluir": "",
+      "forzar": [],
+      "quitar": []
+    },
+    {
+      "id": "movilidad",
+      "nombre": "Movilidad sostenible y vehículo eléctrico",
+      "en": "Sustainable mobility and electric vehicles",
+      "incluir": "moves|vehiculo electrico|vehiculos electricos|puntos? de recarga|movilidad sostenible|movilidad electrica|zonas? de bajas emisiones|transporte urbano|autobus|flotas? de transporte|transformacion de flotas|ciclab|bicicleta",
+      "excluir": "",
+      "forzar": [],
+      "quitar": []
+    },
+    {
+      "id": "vivienda",
+      "nombre": "Vivienda y rehabilitación de edificios",
+      "en": "Housing and building renovation",
+      "incluir": "vivienda|rehabilitacion (residencial|de edificios|energetica)|programa de rehabilitacion|entornos residenciales|\\bbarrios\\b|alquiler social|parque publico",
+      "excluir": "",
+      "forzar": [],
+      "quitar": []
+    },
+    {
+      "id": "empleo",
+      "nombre": "Empleo y formación",
+      "en": "Employment and training",
+      "incluir": "empleo|formacion profesional|acciones formativas|contratacion de (personas|jovenes)|investigo|primeras experiencias|insercion laboral|recualificacion|orientacion laboral|desempleadas",
+      "excluir": "",
+      "forzar": [],
+      "quitar": []
+    },
+    {
+      "id": "cuidados",
+      "nombre": "Cuidados, dependencia y discapacidad",
+      "en": "Care, long-term care and disability",
+      "incluir": "\\bdependencia|cuidados|personas mayores|teleasistencia|\\bresidencias?\\b|discapacidad|accesibilidad universal|atencion domiciliaria|centros de dia|soledad no deseada",
+      "excluir": "investigador|investigacion|autoconsumo|renovable|deport",
+      "forzar": [],
+      "quitar": []
+    },
+    {
+      "id": "igualdad",
+      "nombre": "Igualdad y violencia de género",
+      "en": "Gender equality and gender-based violence",
+      "incluir": "violencia (de genero|machista|contra las mujeres|sexual)|igualdad (de genero|entre mujeres y hombres|de oportunidades entre)|victimas de (la )?violencia|apoyo a mujeres|mujeres victimas|insercion de mujeres|mujeres (en|del) (el )?(ambito|medio) rural|programa de apoyo a mujeres|centros? de crisis|violencias machistas|lgtbi|diversidad sexual",
+      "excluir": "",
+      "forzar": [],
+      "quitar": []
+    },
+    {
+      "id": "inclusion",
+      "nombre": "Inclusión social y tercer sector",
+      "en": "Social inclusion and third sector",
+      "incluir": "inclusion social|itinerarios|tercer sector|exclusion social|vulnerab|pobreza|sinhogar|sin hogar|ingreso minimo|economia social|entidades sin animo de lucro|entidades del tercer|migrant|inmigra|refugiad|asilo|proteccion internacional",
+      "excluir": "",
+      "forzar": [],
+      "quitar": []
+    },
+    {
+      "id": "cultura",
+      "nombre": "Cultura, patrimonio y deporte",
+      "en": "Culture, heritage and sport",
+      "incluir": "\\bcultur|patrimonio (cultural|historico)|artes escenicas|\\bmusica|\\bcine\\b|audiovisual|\\blibros?\\b|bibliotec|museo|archivos?\\b|\\bdeport|teatro|danza|industrias creativas",
+      "excluir": "agricultur|acuicultur|silvicultur",
+      "forzar": [],
+      "quitar": []
+    },
+    {
+      "id": "turismo",
+      "nombre": "Turismo",
+      "en": "Tourism",
+      "incluir": "turism|destino|planes de sostenibilidad turistica",
+      "excluir": "",
+      "forzar": [],
+      "quitar": []
+    },
+    {
+      "id": "agua_residuos",
+      "nombre": "Agua, residuos y economía circular",
+      "en": "Water, waste and circular economy",
+      "incluir": "residuos|economia circular|depuraci|saneamiento|abastecimiento|regadio|agua|reciclaj|biorresiduo",
+      "excluir": "",
+      "forzar": [],
+      "quitar": []
+    },
+    {
+      "id": "investigacion",
+      "nombre": "Investigación e innovación",
+      "en": "Research and innovation",
+      "incluir": "investigacion|\\bi\\+d|innovacion|cientific|doctor|postdoctor|ramon y cajal|generacion de conocimiento|transferencia de conocimiento",
+      "excluir": "",
+      "forzar": [],
+      "quitar": []
+    },
+    {
+      "id": "educacion",
+      "nombre": "Educación",
+      "en": "Education",
+      "incluir": "educacion|educativ|\\bescuelas?\\b|centros docentes|alumnado|universidad|universitari|primer ciclo de educacion infantil|codigo escuela",
+      "excluir": "colegios? profesional|union profesional|escuela de negocios",
+      "forzar": [],
+      "quitar": []
+    },
+    {
+      "id": "rural",
+      "nombre": "Agricultura, pesca y medio rural",
+      "en": "Agriculture, fisheries and rural areas",
+      "incluir": "agricol|agrari|ganader|explotaciones|pesca|pesquer|acuicultura|forestal|rural|agroalimentari|invernadero|maquinaria agricola",
+      "excluir": "",
+      "forzar": [],
+      "quitar": []
+    }
+  ]
+}
