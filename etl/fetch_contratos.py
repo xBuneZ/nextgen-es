@@ -415,6 +415,8 @@ def build(fuentes: list[str] | None = None, force: bool = False) -> None:
         by_proc[r["proc"] or "?"]["n"] += 1
         by_proc[r["proc"] or "?"]["importe"] += importe
         for l in lotes:
+            if es_persona(l.get("nif")):  # personas físicas: no se publican nombre ni DNI
+                continue
             key = (l["nif"] or l["adj"]).upper()
             a = by_adj.setdefault(key, {"nif": l["nif"], "nombre": l["adj"], "importe": 0.0, "n": 0, "unico": 0})
             a["importe"] += l["importe"]
@@ -424,7 +426,10 @@ def build(fuentes: list[str] | None = None, force: bool = False) -> None:
         adjs = {}
         for l in lotes:
             k = (l["nif"] or l["adj"]).upper()
-            adjs.setdefault(k, {"nombre": l["adj"], "nif": l["nif"], "importe": 0.0})["importe"] += l["importe"]
+            if es_persona(l.get("nif")):  # se publica el importe, pero no el nombre ni el DNI
+                adjs.setdefault(k, {"nombre": PERSONA_FISICA, "nif": "", "importe": 0.0})["importe"] += l["importe"]
+            else:
+                adjs.setdefault(k, {"nombre": l["adj"], "nif": l["nif"], "importe": 0.0})["importe"] += l["importe"]
         contratos.append({
             "exp": r["exp"], "url": r["url"], "objeto": r["objeto"][:300], "tipo": r["tipo"], "cpv": r["cpv"],
             "lugar": r["lugar"], "organo": r["organo"], "organo_nif": (r.get("organo_nif") or "").upper(), "ambito": ambito, "ruta": " › ".join(r["sup"][1:4]),
@@ -492,6 +497,12 @@ def trozo(cid: str) -> int:
 MEDIO_PROPIO = re.compile(r"\bM\.\s?P\.|medio propio|\bTRAGSA|TRAGSATEC", re.I)
 NOCOMP = ("licitador_unico", "negociado_sin_publicidad", "emergencia")
 PERSONA = re.compile(r"^[0-9XYZKLM]\d{7}[A-Z]$")
+PERSONA_FISICA = "Persona física (datos protegidos)"
+
+
+def es_persona(nif: str | None) -> bool:
+    """Adjudicatario persona física (DNI/NIE): por protección de datos no se republican su nombre ni su DNI."""
+    return bool(PERSONA.match((nif or "").strip().upper()))
 
 
 def portada(contratos: list[dict]) -> dict:
@@ -567,6 +578,8 @@ def write_split(out: dict) -> None:
         if "idEvl=" in (c.get("url") or ""):
             c.pop("url", None)  # se reconstruye a partir del cid
         cols["id"].append(cid)
+        if es_persona(c.get("exp")):  # número de expediente con forma de DNI/NIE: no se publica
+            c["exp"] = "—"
         cols["exp"].append(c.get("exp") or "")
         textos.append(re.sub(r"\s+", " ", c.get("objeto") or "").strip()[:100])
         cols["org"].append(ref("org", c.get("organo") or "", [c.get("organo") or "", c.get("ambito") or "", c.get("ruta") or ""]))
