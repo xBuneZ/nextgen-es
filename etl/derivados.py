@@ -253,33 +253,55 @@ def leer_xlsx(f: Path) -> list[tuple]:
     return list(openpyxl.load_workbook(f, read_only=True).active.iter_rows(values_only=True))
 
 
+def scoreboard_filas() -> tuple[list, list] | None:
+    """Filas del Scoreboard: de los Excel recién descargados (y se guardan en scoreboard.json)
+    o, si no los hay en esta ejecución, de la última copia publicada."""
+    if (RRF / "perceptores.xlsx").exists() and (RRF / "pagos.xlsx").exists():
+        conv = lambda rows: [[str(c) if hasattr(c, "isoformat") else c for c in r] for r in rows if r and r[0]]
+        pag, per = conv(leer_xlsx(RRF / "pagos.xlsx")[1:]), conv(leer_xlsx(RRF / "perceptores.xlsx")[1:])
+        dump("scoreboard.json", {"pagos": pag, "perceptores": per})
+        return pag, per
+    f = D / "scoreboard.json"
+    if f.exists():
+        d = json.loads(f.read_text())
+        return d["pagos"], d["perceptores"]
+    return None
+
+
+CONFIANZA = {"bdns": "alta", "adjudicatario": "alta", "nif": "alta", "unidades": "media", "departamentos": "media", "nombre": "baja"}
+
+
 def bruselas(convs: list[dict]) -> dict | None:
-    if not (RRF / "perceptores.xlsx").exists() or not (RRF / "pagos.xlsx").exists():
+    filas = scoreboard_filas()
+    if not filas:
         return None
-    # Pagos de la UE (todos los países, para comparar)
-    pagos = [r for r in leer_xlsx(RRF / "pagos.xlsx")[1:] if r and r[0]]
+    pagos, perceptores = filas
     esp = sorted(([str(r[1])[:10], r[2], r[3], round(float(r[4] or 0))] for r in pagos if r[0] == "Spain"), key=lambda x: x[0])
     por_pais = defaultdict(lambda: {"subvenciones": 0, "prestamos": 0})
     for r in pagos:
         por_pais[r[0]]["subvenciones" if r[2] == "Grants" else "prestamos"] += float(r[4] or 0)
     paises = sorted(({"pais": k, "subvenciones": round(v["subvenciones"]), "prestamos": round(v["prestamos"])} for k, v in por_pais.items()),
                     key=lambda x: -x["subvenciones"])
+    revision = json.loads((ROOT / "etl" / "bruselas_revision.json").read_text()).get("perceptores", {}) \
+        if (ROOT / "etl" / "bruselas_revision.json").exists() else {}
 
-    # Lo publicado en España para cada perceptor
+    # Lo recibido: subvenciones (BDNS) y contratos/encargos ganados
     sub = {}
     for f in glob.glob(str(D / "benef_idx" / "n_*.json")):
         for r in json.loads(Path(f).read_text()):
             sub.setdefault(r[0].upper(), r[2])
-    emp = D / "contratos" / "empresas.json"
-    ganado = {e[0].upper(): e[3] for e in (json.loads(emp.read_text()) if emp.exists() else []) if e[0]}
     contratos = [c for f in glob.glob(str(D / "contratos" / "det" / "*.json")) for c in json.loads(Path(f).read_text()).values() if c.get("importe")]
-    # Las plataformas autonómicas no publican el NIF del órgano: se cruza por nombre, tolerando
-    # variantes de idioma y escritura (Infraestructuras/Infraestructures, Cataluña/Catalunya…):
-    # se comparan las raíces (5 primeras letras) de las palabras significativas, y las siglas.
+    ganado, encargos_rec = defaultdict(float), defaultdict(float)
+    for c in contratos:
+        for a in c.get("adj", []):
+            if a.get("nif"):
+                (encargos_rec if c.get("proc") == "Encargo a medio propio" else ganado)[a["nif"].upper()] += a.get("importe") or 0
+
+    # Lo gastado: contratos y encargos como órgano. Las plataformas autonómicas no publican el NIF
+    # del órgano: se cruzan por nombre, tolerando variantes de idioma (raíces) y por siglas.
     VAC = {"de", "del", "la", "las", "los", "el", "els", "les", "i", "y", "a", "e", "do", "da", "para", "per", "sa", "sau", "sl", "slu",
            "sme", "mp", "s", "m", "p", "u", "l", "d", "ente", "publico", "sociedad", "anonima", "societat", "empresa"}
-    def raices(x):
-        return frozenset(w[:5] for w in re.split(r"[^a-z0-9]+", norm(x)) if w and w not in VAC and len(w) > 1)
+    raices = lambda x: frozenset(w[:5] for w in re.split(r"[^a-z0-9]+", norm(x)) if w and w not in VAC and len(w) > 1)
     def siglas(x):
         m = re.search(r"\(([A-Z0-9]{3,})\)", x or "")
         return m.group(1) if m else None
@@ -292,40 +314,43 @@ def bruselas(convs: list[dict]) -> dict | None:
             if siglas(c.get("organo")):
                 por_sigla[siglas(c["organo"])].append(c)
 
-    def por_nombre(nombre):
-        r = raices(nombre)
-        out = []
-        if len(r) >= 2:
-            for k, cs in por_raiz.items():
-                if k and len(r & k) / len(r | k) >= 0.75:
-                    out += cs
-        if siglas(nombre):
-            out += por_sigla.get(siglas(nombre), [])
-        return out
-
-    def contratos_de(nif: str, nombre: str) -> list:
-        sel = {c["cid"]: c for c in por_nif.get(nif, [])}
-        sel.update({c["cid"]: c for c in por_nombre(nombre)})
+    def gasto_de(nif: str, nombre: str, rev: dict) -> dict:
+        """cid -> (contrato, método)."""
+        sel = {c["cid"]: (c, "nif") for c in por_nif.get(nif, [])}
         n = norm(nombre)
         m = re.match(r"ministerio (?:de |del |para la |para el )?(?:la |el |los |las )?([a-z]+)", n)
         if m and nif[:1] == "S":  # todas las unidades del ministerio, aunque tengan NIF propio
-            clave = m.group(1)
             for c in contratos:
                 r0 = norm((c.get("ruta") or "").split(" › ")[0])
-                if c.get("ambito") == "ADMINISTRACIÓN GENERAL DEL ESTADO" and r0.startswith("ministerio") and clave in r0:
-                    sel[c["cid"]] = c
+                if c.get("ambito") == "ADMINISTRACIÓN GENERAL DEL ESTADO" and r0.startswith("ministerio") and m.group(1) in r0:
+                    sel.setdefault(c["cid"], (c, "unidades"))
         k = ccaa_de(nombre) if nif[:1] == "S" else None
         if k:  # departamentos de la comunidad, sin las entidades locales
             for c in contratos:
                 ruta = norm(c.get("ruta") or "")
-                r0 = ruta.split(" › ")[0]
                 if c.get("ambito") in ("COMUNIDADES Y CIUDADES AUTÓNOMAS", "PLATAFORMAS AUTONÓMICAS PROPIAS") \
-                        and any(a in r0 for a in CCAA[k]) and not re.search(r"administracio local|entidades locales|ayuntamiento|ajuntament|concello|diputaci", ruta):
-                    sel[c["cid"]] = c
-        return list(sel.values())
+                        and any(a in ruta.split(" › ")[0] for a in CCAA[k]) \
+                        and not re.search(r"administracio local|entidades locales|ayuntamiento|ajuntament|concello|diputaci", ruta):
+                    sel.setdefault(c["cid"], (c, "departamentos"))
+        r = raices(nombre)
+        if len(r) >= 2:
+            for key, cs in por_raiz.items():
+                if key and len(r & key) / len(r | key) >= 0.75:
+                    for c in cs:
+                        sel.setdefault(c["cid"], (c, "nombre"))
+        if siglas(nombre):
+            for c in por_sigla.get(siglas(nombre), []):
+                sel.setdefault(c["cid"], (c, "nombre"))
+        # Revisión manual: órganos que no son de esta entidad (o que sí lo son)
+        for pat in rev.get("excluir_organos", []):
+            sel = {k: v for k, v in sel.items() if not re.search(pat, norm(v[0].get("organo", "")))}
+        for pat in rev.get("incluir_organos", []):
+            for c in contratos:
+                if re.search(pat, norm(c.get("organo", ""))):
+                    sel.setdefault(c["cid"], (c, "nombre"))
+        return sel
 
-    propias_ccaa = defaultdict(float)
-    propias_min = defaultdict(float)
+    propias_ccaa, propias_min = defaultdict(float), defaultdict(float)
     for c in convs:
         if c["nivel1"] == "AUTONOMICA":
             k = next((k for k, al in CCAA.items() if any(a in norm(c["nivel2"]) for a in al)), None)
@@ -335,35 +360,45 @@ def bruselas(convs: list[dict]) -> dict | None:
             propias_min[norm(c["nivel2"])] += c["importe"]
 
     out = []
-    for r in leer_xlsx(RRF / "perceptores.xlsx")[1:]:
-        if not r or r[0] != "Spain":
+    for r in perceptores:
+        if r[0] != "Spain":
             continue
-        nif = (r[2] or "").strip().upper()
-        nombre = (r[1] or "").strip()
-        declarado = float(r[4] or 0)
-        cs = contratos_de(nif, nombre)
-        contratado = sum(c["importe"] for c in cs)
-        recibido = sub.get(nif, 0) + ganado.get(nif, 0)
+        nif, nombre, declarado = (r[2] or "").strip().upper(), (r[1] or "").strip(), float(r[4] or 0)
+        rev = revision.get(nif, {})
+        sel = gasto_de(nif, nombre, rev)
+        por_metodo = defaultdict(float)
+        for c, met in sel.values():
+            por_metodo[met] += c["importe"]
+        contratado = sum(por_metodo.values())
+        rec_bdns, rec_adj, rec_enc = sub.get(nif, 0), ganado.get(nif, 0), encargos_rec.get(nif, 0)
+        recibido = rec_bdns + rec_adj + rec_enc
+        # Con rastro: lo que consta recibido o gastado por la propia entidad. Sus convocatorias
+        # NO cuentan: si reparte el dinero en ayudas, los perceptores finales son otros.
+        rastro = min(declarado, max(recibido, contratado))
+        fuentes = {"bdns": rec_bdns, "adjudicatario": rec_adj + rec_enc} if recibido >= contratado else dict(por_metodo)
+        base = sum(fuentes.values()) or 1
+        conf = min((CONFIANZA[m] for m, v in fuentes.items() if v / base >= 0.2), key=["baja", "media", "alta"].index, default="—") if rastro else "—"
+        if conf == "baja" and rev.get("revisado"):
+            conf = "media"
         k = ccaa_de(nombre) if nif[:1] == "S" else None
-        m = re.match(r"ministerio (?:de |del |para la |para el )?(?:la |el |los |las )?([a-z]+)", norm(nombre))
-        repartido = propias_ccaa.get(k, 0) if k else (sum(v for kk, v in propias_min.items() if m and m.group(1) in kk) if m and nif[:1] == "S" else 0)
-        publicado = max(recibido, repartido + contratado)
-        rastro = min(declarado, publicado)
+        mm = re.match(r"ministerio (?:de |del |para la |para el )?(?:la |el |los |las )?([a-z]+)", norm(nombre))
+        repartido = propias_ccaa.get(k, 0) if k else (sum(v for kk, v in propias_min.items() if mm.group(1) in kk) if mm and nif[:1] == "S" else 0)
         medidas = [x.strip(" •\n") for x in str(r[3] or "").split("\n") if x.strip(" •\n")]
         out.append({"nif": nif, "nombre": nombre, "declarado": round(declarado), "medidas": medidas[:12],
-                    "recibido": round(recibido), "repartido": round(repartido), "contratado": round(contratado), "n_contratos": len(cs),
-                    "contratos": [[c["cid"], round(c["importe"]), (c.get("adj") or [{}])[0].get("nombre", "")] for c in sorted(cs, key=lambda c: -c["importe"])[:10]],
+                    "recibido": round(recibido), "rec_bdns": round(rec_bdns), "rec_contratos": round(rec_adj), "rec_encargos": round(rec_enc),
+                    "contratado": round(contratado), "por_metodo": {m: round(v) for m, v in por_metodo.items()},
+                    "n_contratos": len(sel), "repartido": round(repartido), "confianza": conf, "nota": rev.get("nota", ""),
+                    "contratos": [[c["cid"], round(c["importe"]), (c.get("adj") or [{}])[0].get("nombre", ""), met, c.get("proc", "")]
+                                  for c, met in sorted(sel.values(), key=lambda x: -x[0]["importe"])[:12]],
                     "con_rastro": round(rastro), "sin_rastro": round(declarado - rastro)})
     out.sort(key=lambda e: -e["declarado"])
     ref = json.loads((ROOT / "site" / "referencia.json").read_text()) if (ROOT / "site" / "referencia.json").exists() else {}
     return {
-        "fuente": FUENTE_RRF,
-        "pagos": esp,
+        "fuente": FUENTE_RRF, "pagos": esp,
         "pagado_subvenciones": round(sum(p[3] for p in esp if p[1] == "Grants")),
         "pagado_prestamos": round(sum(p[3] for p in esp if p[1] == "Loans")),
         "asignado_subvenciones": ref.get("subvenciones_asignadas"),
-        "paises": paises,
-        "perceptores": out,
+        "paises": paises, "perceptores": out,
         "declarado_total": round(sum(e["declarado"] for e in out)),
         "con_rastro_total": round(sum(e["con_rastro"] for e in out)),
     }

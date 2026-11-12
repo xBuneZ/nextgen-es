@@ -44,4 +44,4 @@ jobs:
       - name: Publicar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: etl/publicar_datos.sh "Contratos PRTR $(date -u +%F)" contratos temas.json tipos.json cadena.json
+        run: etl/publicar_datos.sh "Contratos PRTR $(date -u +%F)" contratos temas.json tipos.json cadena.json bruselas.json

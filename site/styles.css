@@ -314,3 +314,9 @@ tr.sel td { background: var(--c3-soft); font-weight: 600; }
 .pay li.es .pl { font-weight: 700; }
 .pay li:not(:has(.pd)) { grid-template-columns: minmax(0, 1fr) 90px; grid-template-areas: "pl b" "pb pb"; }
 .prose-list { font-size: 13px; padding-left: 18px; }
+
+.conf { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--soft); color: var(--muted); }
+.conf.c-alta { background: #DCF2E6; color: #11653C; }
+.conf.c-media { background: var(--c3-soft); color: var(--c3-ink); }
+.conf.c-baja { background: #FBE3E3; color: #9B1C1C; }
+@media (prefers-color-scheme: dark) { .conf.c-alta { background: #123524; color: #8FE0B4; } .conf.c-baja { background: #3d1515; color: #f3a6a6; } }

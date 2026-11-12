@@ -1,0 +1,73 @@
+{
+  "_nota": "Revisión manual del cruce entre los 100 mayores perceptores que España declara a la Comisión y los contratos publicados. Por NIF del perceptor: «excluir_organos» quita contratos de órganos que el cruce automático atribuyó por error (expresiones regulares sobre el nombre del órgano, sin tildes y en minúsculas); «incluir_organos» añade órganos que son de la entidad pero no se cruzan solos; «nota» se muestra en su ficha. «revisado: true» indica que los cruces por nombre de ese perceptor se han comprobado a mano.",
+  "perceptores": {
+    "Q5856338H": {
+      "revisado": true,
+      "nota": "Contratos cruzados por el nombre del órgano (su plataforma no publica el NIF); revisado a mano: es la misma entidad."
+    },
+    "A59377135": {
+      "revisado": true,
+      "nota": "Contratos cruzados por el nombre del órgano (su plataforma no publica el NIF); revisado a mano: es la misma entidad."
+    },
+    "A86488087": {
+      "revisado": true,
+      "nota": "Contratos cruzados por el nombre del órgano (su plataforma no publica el NIF); revisado a mano: es la misma entidad."
+    },
+    "Q2801221I": {
+      "revisado": true,
+      "nota": "Contratos cruzados por el nombre del órgano (su plataforma no publica el NIF); revisado a mano: es la misma entidad."
+    },
+    "Q4100702B": {
+      "revisado": true,
+      "nota": "Contratos cruzados por el nombre del órgano (su plataforma no publica el NIF); revisado a mano: es la misma entidad."
+    },
+    "Q7850054C": {
+      "revisado": true,
+      "nota": "Contratos cruzados por el nombre del órgano (su plataforma no publica el NIF); revisado a mano: es la misma entidad."
+    },
+    "Q9150013B": {
+      "revisado": true,
+      "nota": "Contratos cruzados por el nombre del órgano (su plataforma no publica el NIF); revisado a mano: es la misma entidad."
+    },
+    "Q1500382E": {
+      "revisado": true,
+      "nota": "Contratos cruzados por el nombre del órgano (su plataforma no publica el NIF); revisado a mano: es la misma entidad."
+    },
+    "A41857988": {
+      "revisado": true,
+      "nota": "Contratos cruzados por el nombre del órgano (su plataforma no publica el NIF); revisado a mano: es la misma entidad."
+    },
+    "A08016081": {
+      "revisado": true,
+      "nota": "Contratos cruzados por el nombre del órgano (su plataforma no publica el NIF); revisado a mano: es la misma entidad."
+    },
+    "Q4100811A": {
+      "revisado": true,
+      "nota": "Contratos cruzados por el nombre del órgano (su plataforma no publica el NIF); revisado a mano: es la misma entidad."
+    },
+    "A62320486": {
+      "revisado": true,
+      "nota": "Contratos cruzados por el nombre del órgano (su plataforma no publica el NIF); revisado a mano: es la misma entidad."
+    },
+    "Q4100953A": {
+      "revisado": true,
+      "nota": "Contratos cruzados por el nombre del órgano (su plataforma no publica el NIF); revisado a mano: es la misma entidad."
+    },
+    "A31212483": {
+      "revisado": true,
+      "nota": "Contratos cruzados por el nombre del órgano (su plataforma no publica el NIF); revisado a mano: es la misma entidad."
+    },
+    "S5800006H": {
+      "revisado": true,
+      "nota": "Contratos cruzados por el nombre del órgano (su plataforma no publica el NIF); revisado a mano: es la misma entidad."
+    },
+    "Q4100686G": {
+      "revisado": true,
+      "nota": "Contratos cruzados por el nombre del órgano (su plataforma no publica el NIF); revisado a mano: es la misma entidad."
+    },
+    "A08005795": {
+      "revisado": true,
+      "nota": "Contratos cruzados por el nombre del órgano (su plataforma no publica el NIF); revisado a mano: es la misma entidad."
+    }
+  }
+}

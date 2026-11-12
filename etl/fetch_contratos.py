@@ -42,6 +42,9 @@ from xml.etree.ElementTree import iterparse
 FUENTES = {
     "placsp": ("", "https://contrataciondelsectorpublico.gob.es/sindicacion/sindicacion_643/licitacionesPerfilesContratanteCompleto3_{}.zip"),
     "agr": ("agr-", "https://contrataciondelsectorpublico.gob.es/sindicacion/sindicacion_1044/PlataformasAgregadasSinMenores_{}.zip"),
+    # Encargos a medios propios (TRAGSA, INECO, ISDEFE…): ficheros anuales; el de 2022 incluye desde julio de 2021.
+    # No tienen código de financiación: se identifican como PRTR por el texto.
+    "emp": ("emp-", "https://contrataciondelsectorpublico.gob.es/sindicacion/sindicacion_1383/EMP_SectorPublico_{}.zip"),
 }
 REGION_HOST = [("contractaciopublica.cat", "Cataluña"), ("gencat.cat", "Cataluña"), ("juntadeandalucia.es", "Andalucía"),
                ("euskadi.eus", "País Vasco"), ("euskadi.net", "País Vasco"), ("comunidad.madrid", "Comunidad de Madrid"), ("madrid.org", "Comunidad de Madrid"),
@@ -54,6 +57,7 @@ UA = "nextgen-es-transparencia/1.0 (+open data reuse)"
 ATOM = "{http://www.w3.org/2005/Atom}"
 
 PROCEDIMIENTOS = {
+    "ENC": "Encargo a medio propio",
     "1": "Abierto", "2": "Restringido", "3": "Negociado sin publicidad", "4": "Negociado con publicidad",
     "5": "Diálogo competitivo", "6": "Contrato menor", "7": "Derivado de acuerdo marco", "8": "Concurso de proyectos",
     "9": "Abierto simplificado", "10": "Asociación para la innovación", "11": "Derivado de asociación para la innovación",
@@ -267,6 +271,14 @@ def default_periods() -> list[str]:
     return month_range("202101", f"{today.year}{today.month:02d}")
 
 
+def periodos_de(fuente: str, periods: list[str] | None) -> list[str]:
+    """Los encargos se publican por años (AAAA); el resto, por meses (AAAAMM)."""
+    if fuente == "emp":
+        anios = sorted({p[:4] for p in periods}) if periods else [str(y) for y in range(2022, dt.date.today().year + 1)]
+        return [a for a in anios if a >= "2022"]
+    return periods or default_periods()
+
+
 def comprobar(fuentes: list[str], n_contratos: int, force: bool) -> None:
     """Evita publicar datos incompletos: todos los meses cerrados deben estar procesados
     y el número de contratos no puede caer más de un 5 % respecto a lo publicado."""
@@ -275,7 +287,8 @@ def comprobar(fuentes: list[str], n_contratos: int, force: bool) -> None:
     ultimo = (hoy.replace(day=1) - dt.timedelta(days=1)).strftime("%Y%m")
     for f in fuentes:
         pref = FUENTES[f][0]
-        falta = [m for m in month_range("202101", ultimo) if not (CACHE / f"{pref}{m}.jsonl").exists()]
+        esperados = periodos_de("emp", None)[:-1] if f == "emp" else month_range("202101", ultimo)
+        falta = [m for m in esperados if not (CACHE / f"{pref}{m}.jsonl").exists()]
         if falta:
             errores.append(f"faltan {len(falta)} meses de «{f}»: {', '.join(falta[:8])}{'…' if len(falta) > 8 else ''}")
     prev = DIR / "indice.json"
@@ -343,6 +356,12 @@ def build(fuentes: list[str] | None = None, force: bool = False) -> None:
             return None
 
     for r in recs:
+        if r.get("fuente") == "emp":
+            r["proc"] = "Encargo a medio propio"
+            ls = [dict(l) for l in r["lotes"] if l.get("adj")]
+            if ls and not any(l.get("importe") for l in ls):
+                ls[0]["importe"] = r.get("presupuesto") or 0
+            r["lotes"] = ls
         lotes = [dict(l) for l in r["lotes"] if l.get("importe") and l.get("adj")]
         importe = sum(l["importe"] for l in lotes)
         # Acuerdos marco con varios lotes o adjudicatarios: la Plataforma suele registrar a cada
@@ -483,7 +502,7 @@ def portada(contratos: list[dict]) -> dict:
                    and any(f in c["flags"] for f in fuertes) and c.get("adj")), key=lambda c: -c["importe"])[:6]
     g, imp, imp_no = {}, 0.0, 0.0
     for c in contratos:
-        if not c["importe"] or MEDIO_PROPIO.search(c.get("organo") or ""):
+        if not c["importe"] or MEDIO_PROPIO.search(c.get("organo") or "") or c.get("proc") == "Encargo a medio propio":
             continue
         no = any(f in c["flags"] for f in NOCOMP)
         a = g.setdefault(c["organo"], {"organo": c["organo"], "ambito": c.get("ambito", ""), "n": 0, "importe": 0.0, "sin_comp": 0.0})
@@ -592,11 +611,11 @@ def main() -> None:
         return
     CACHE.mkdir(parents=True, exist_ok=True)
     if not args.build_only:
-        periods = args.periods or default_periods()
         for f in args.fuentes:
-            for p in periods[-args.refresh_last:] if args.refresh_last else []:
+            ps = periodos_de(f, args.periods)
+            for p in ps[-args.refresh_last:] if args.refresh_last else []:
                 (CACHE / f"{FUENTES[f][0]}{p}.jsonl").unlink(missing_ok=True)
-            for p in periods:
+            for p in ps:
                 process_period(p, args.keep_zips, f)
     if not args.no_build:
         build(list(FUENTES), args.force)

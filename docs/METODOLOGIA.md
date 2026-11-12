@@ -145,4 +145,10 @@ Para cada perceptor declarado por España se busca lo publicado en España:
 - **Recibido:** como beneficiario en la BDNS o como adjudicatario de contratos.
 - **Gastado:** en sus propias convocatorias y en contratos como órgano de contratación. Se cruza por NIF; para los ministerios, por todas sus unidades (cadena de órganos); para las comunidades autónomas, por sus departamentos; y en las plataformas autonómicas sin NIF, por el nombre del órgano, tolerando variantes de idioma (raíces de palabras y siglas).
 
-Con rastro = mínimo entre lo declarado y el máximo de recibido o gastado. Sin rastro = declarado − con rastro. Los medios propios ejecutan buena parte con personal propio, y algunos órganos no se pueden cruzar por nombre, así que la diferencia es algo que preguntar, no una prueba.
+Con rastro = mínimo entre lo declarado y el máximo de recibido o gastado. Sin rastro = declarado − con rastro. **No cuentan las convocatorias propias del perceptor:** si reparte el dinero en ayudas, según el reglamento los perceptores finales son quienes las reciben, no él.
+
+Cada perceptor indica cómo se ha cruzado y con qué **confianza**: alta (NIF o beneficiario en la BDNS), media (unidades del ministerio, departamentos autonómicos o nombre revisado a mano) o baja (nombre sin revisar). La revisión manual es pública en `etl/bruselas_revision.json`.
+
+# Encargos a medios propios
+
+Fuente: conjunto de datos abiertos de encargos a medios propios de la Plataforma de Contratación (`EMP_SectorPublico`, ficheros anuales desde julio de 2021). No incluyen código de financiación, así que se identifican como Plan de Recuperación por el texto (PRTR, Plan de Recuperación, MRR, Next Generation). Aparecen en Contratos con el procedimiento «Encargo a medio propio», cuentan como recibido por el medio propio y como gasto del órgano que encarga, y no entran en el ranking de competencia (son, por definición, adjudicaciones sin concurso previstas por la ley). Los medios propios ejecutan buena parte con personal propio, y algunos órganos no se pueden cruzar por nombre, así que la diferencia es algo que preguntar, no una prueba.

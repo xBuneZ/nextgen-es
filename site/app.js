@@ -604,7 +604,7 @@ function rankContratos() {
   const g = new Map();
   let imp = 0, impNo = 0;
   for (const c of CT.data.contratos) {
-    if (!(c.importe > 0)) continue;
+    if (!(c.importe > 0) || c.proc === "Encargo a medio propio") continue;
     const k = c.organo || "?";
     let a = g.get(k);
     if (!a) g.set(k, (a = { nombre: k, sub: c.ruta || c.ambito, amb: c.ambito, mp: MEDIO_PROPIO.test(k), n: 0, imp: 0, impNo: 0, uni: 0, neg: 0, plazo: 0, rec: 0 }));
@@ -1122,7 +1122,7 @@ const BRU = { data: null, loading: null };
 const bruState = { sort: "declarado", dir: -1, solo: false, q: "" };
 function loadBruselas() {
   if (!BRU.loading) BRU.loading = fetch("data/bruselas.json").then((r) => (r.ok ? r.json() : null)).catch(() => null).then((d) => {
-    if (d) { d.byNif = new Map(d.perceptores.map((e) => [e.nif, e])); d.perceptores.forEach((e) => { e.publicado = Math.max(e.recibido, e.repartido + e.contratado); e.pct = e.declarado ? e.sin_rastro / e.declarado : 0; e._s = norm(e.nombre + " " + e.nif); }); }
+    if (d) { d.byNif = new Map(d.perceptores.map((e) => [e.nif, e])); d.perceptores.forEach((e) => { e.publicado = Math.max(e.recibido, e.contratado); e.pct = e.declarado ? e.sin_rastro / e.declarado : 0; e._s = norm(e.nombre + " " + e.nif); }); }
     return (BRU.data = d);
   });
   return BRU.loading;
@@ -1162,10 +1162,11 @@ function renderBruselas() {
   const k = bruState.sort, d = bruState.dir;
   rows.sort((a, b) => (a[k] > b[k] ? d : a[k] < b[k] ? -d : 0));
   const th = (key, l, cls = "num") => `<th class="${cls}" data-sort="${key}">${esc(l)}${bruState.sort === key ? (bruState.dir < 0 ? " ↓" : " ↑") : ""}</th>`;
-  $("#uresults").innerHTML = `<div class="table-wrap"><table><thead><tr>${th("nombre", t("bru_recipient"), "")}${th("declarado", t("bru_declared"))}${th("publicado", t("bru_published"), "num hide-sm")}${th("sin_rastro", t("cad_no_trace"))}</tr></thead>
+  $("#uresults").innerHTML = `<div class="table-wrap"><table><thead><tr>${th("nombre", t("bru_recipient"), "")}${th("declarado", t("bru_declared"))}${th("publicado", t("bru_published"), "num hide-sm")}${th("sin_rastro", t("cad_no_trace"))}${th("confianza", t("bru_conf"), "hide-sm")}</tr></thead>
   <tbody>${rows.map((e) => `<tr data-bnif="${esc(e.nif)}"><td class="t-title">${esc(e.nombre)}<div class="t-sub">${esc(e.nif)}${e.n_contratos ? ` · ${num(e.n_contratos)} ${t("b_n_contracts")}` : ""}</div></td>
     <td class="num">${eurShort(e.declarado)}</td><td class="num hide-sm">${eurShort(e.publicado)}</td>
-    <td class="num">${e.sin_rastro ? `<b>${eurShort(e.sin_rastro)}</b><span class="sub">${pctf(e.pct)}</span>` : "—"}</td></tr>`).join("")}</tbody></table></div>`;
+    <td class="num">${e.sin_rastro ? `<b>${eurShort(e.sin_rastro)}</b><span class="sub">${pctf(e.pct)}</span>` : "—"}</td>
+    <td class="hide-sm"><span class="conf c-${esc(e.confianza)}">${esc(t("bru_conf_" + e.confianza) || e.confianza)}</span></td></tr>`).join("")}</tbody></table></div>`;
 }
 function bindBruselas() {
   if (!BRU.data) return;
@@ -1189,11 +1190,21 @@ async function showPerceptor(nif) {
     <div class="kpis">
       <div class="kpi"><b>${eurShort(e.declarado)}</b><span>${t("bru_declared_long")}</span></div>
       <div class="kpi"><b>${eurShort(e.recibido)}</b><span>${t("bru_received_pub")}</span></div>
-      <div class="kpi"><b>${eurShort(e.repartido + e.contratado)}</b><span>${t("bru_spent_pub")}</span></div>
+      <div class="kpi"><b>${eurShort(e.contratado)}</b><span>${t("bru_spent_pub")}</span></div>
       <div class="kpi warn"><b>${eurShort(e.sin_rastro)}</b><span>${t("cad_no_trace")}</span></div>
     </div>
+    <p><span class="conf c-${esc(e.confianza)}">${t("bru_conf")}: ${esc(t("bru_conf_" + e.confianza))}</span></p>
+    <h2>${t("bru_how")}</h2>
+    <dl class="meta">
+      ${e.rec_bdns ? `<dt>${t("bru_m_bdns")}</dt><dd>${eur(e.rec_bdns)}</dd>` : ""}
+      ${e.rec_contratos ? `<dt>${t("bru_m_adj")}</dt><dd>${eur(e.rec_contratos)}</dd>` : ""}
+      ${e.rec_encargos ? `<dt>${t("bru_m_enc")}</dt><dd>${eur(e.rec_encargos)}</dd>` : ""}
+      ${Object.entries(e.por_metodo).map(([m, v]) => `<dt>${t("bru_m_" + m)}</dt><dd>${eur(v)}</dd>`).join("")}
+      ${e.repartido ? `<dt>${t("bru_m_rep")}</dt><dd>${eur(e.repartido)} <span class="sub">${t("bru_m_rep_note")}</span></dd>` : ""}
+    </dl>
+    ${e.nota ? `<p class="sub">${esc(e.nota)}</p>` : ""}
     <h2>${t("bru_measures")}</h2><ul class="prose-list">${e.medidas.map((m) => `<li>${esc(m)}</li>`).join("")}</ul>
-    <h2>${t("bru_main_contracts")}</h2>${e.contratos.length ? `<div class="table-wrap"><table><tbody>${e.contratos.map(([cid, imp, adj]) => `<tr data-cid="${encodeURIComponent(cid)}"><td>${esc(adj || "—")}</td><td class="num">${eur(imp)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">${t("cad_none_pub")}</p>`}
+    <h2>${t("bru_main_contracts")}</h2>${e.contratos.length ? `<div class="table-wrap"><table><tbody>${e.contratos.map(([cid, imp, adj, met, proc]) => `<tr data-cid="${encodeURIComponent(cid)}"><td>${esc(adj || "—")}<div class="t-sub">${esc(proc || "")}${met ? " · " + esc(t("bru_m_" + met)) : ""}</div></td><td class="num">${eur(imp)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">${t("cad_none_pub")}</p>`}
     <section class="explain"><h2>${t("sol_title")}</h2><details><summary class="btn">${t("sol_btn")}</summary>
       <ol class="steps"><li>${t("sol_step1")}<textarea class="req" readonly rows="12">${esc(txt)}</textarea><button type="button" class="btn-sm copy">${t("sol_copy")}</button></li>
       <li>${t("sol_step2")} ${/^[SQ]28/.test(e.nif) || /^MINISTERIO/.test(e.nombre.toUpperCase()) ? `<a href="https://transparencia.gob.es" target="_blank" rel="noopener">${t("sol_where_age")} ↗</a>` : `<a href="https://duckduckgo.com/?q=${encodeURIComponent("portal transparencia solicitud acceso información " + prettyOrg(e.nombre))}" target="_blank" rel="noopener">${t("sol_where_other").replace("{o}", esc(prettyOrg(e.nombre)))} ↗</a>`}<span class="sub">${t("sol_deadline")}</span></li></ol></details></section>
