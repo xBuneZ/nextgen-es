@@ -194,12 +194,19 @@ def cadena(convs: list[dict]) -> dict:
             k = next((k for k, al in CCAA.items() if any(a in norm(c["nivel2"]) for a in al)), None)
             if k:
                 propias_ccaa[k].append(c)
-    # Contratos Next Gen por NIF del órgano
-    contr = defaultdict(list)
+    # Contratos Next Gen por NIF del órgano. Las plataformas autonómicas agregadas no
+    # publican el NIF (usan códigos DIR3): esos contratos se emparejan por tipo y nombre.
+    contr, contr_nombre = defaultdict(list), defaultdict(list)
     for f in glob.glob(str(D / "contratos" / "det" / "*.json")):
         for c in json.loads(Path(f).read_text()).values():
-            if c.get("organo_nif") and c.get("importe"):
+            if not c.get("importe"):
+                continue
+            if c.get("organo_nif"):
                 contr[c["organo_nif"].upper()].append(c)
+            else:
+                cl = clase(c.get("organo", ""))
+                if cl:
+                    contr_nombre[(cl, lugar(c["organo"]))].append(c)
     out = []
     for nif, r in rec.items():
         if r[2] < 50_000:
@@ -218,7 +225,7 @@ def cadena(convs: list[dict]) -> dict:
             props, tipo = [], "local"
         else:
             props, tipo = [], "otro"
-        cs = contr.get(nif.upper(), [])
+        cs = contr.get(nif.upper(), []) + (contr_nombre.get((cl, lugar(nombre)), []) if cl and not k_ccaa else [])
         repartido = sum(c["importe"] for c in props)
         contratado = sum(c["importe"] for c in cs)
         out.append({
