@@ -382,6 +382,8 @@ function shareBlock(text, path) {
 const shareFlags = (flags, pref) => (flags || []).slice(0, 2).map((f) => t(pref + f).toLowerCase()).join(", ");
 
 function openModal(html) {
+  const tit = (html.match(/<h3>([\s\S]*?)<\/h3>/) || [])[1];
+  if (tit) html += `<p class="err-link"><a href="${corrUrl(location.href, tit.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&"))}" target="_blank" rel="noopener">${t("corr_link")} ↗</a></p>`;
   $("#modal-body").innerHTML = html;
   const m = $("#modal");
   if (!m.open) m.showModal();
@@ -1211,6 +1213,40 @@ async function showPerceptor(nif) {
     ${shareBlock(t("share_bru").replace("{o}", prettyOrg(e.nombre)).replace("{d}", eurShort(e.declarado)).replace("{s}", eurShort(e.sin_rastro)) + " " + t("share_tail"), "#/perceptor/" + encodeURIComponent(e.nif))}`);
 }
 
+
+// ---------- Correcciones ----------
+const corrUrl = (ref, titulo) => `https://github.com/${REPO}/issues/new?template=correccion.yml&labels=correccion&title=${encodeURIComponent("[Corrección] " + (titulo || "").slice(0, 100))}&ref=${encodeURIComponent(ref)}`;
+async function viewCorrecciones() {
+  const d = await fetch("data/correcciones.json").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const lista = (d && d.correcciones) || [];
+  const est = (e) => `<span class="conf c-${e === "corregido" ? "alta" : e === "no_procede" ? "—" : "media"}">${t("corr_" + e)}</span>`;
+  return `<div class="prose"><h1>${t("corr_title")}</h1>
+    <p>${t("corr_intro")}</p>
+    <p><a class="btn" href="${corrUrl(location.origin + location.pathname, "")}" target="_blank" rel="noopener">${t("corr_report")} ↗</a></p>
+    <p class="sub">${t("corr_how")}</p>
+    <h2>${t("corr_log")}</h2>
+    ${lista.length ? `<div class="table-wrap flat"><table><tbody>${lista.map((c) => `<tr><td><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.titulo)}</a><div class="t-sub">${esc(c.abierto)}${c.cerrado ? " → " + esc(c.cerrado) : ""}</div></td><td>${est(c.estado)}</td></tr>`).join("")}</tbody></table></div>`
+      : `<p class="muted">${t("corr_none")}</p>`}
+    <h2>${t("corr_fixed_by_us")}</h2><p>${t("corr_fixed_by_us_txt")} <a href="https://github.com/${REPO}/blob/main/docs/METODOLOGIA.md" target="_blank" rel="noopener">${t("nav_method")} ↗</a></p></div>`;
+}
+
+// ---------- Aviso legal ----------
+function viewAvisoLegal() {
+  const repo = `https://github.com/${REPO}`;
+  if (lang !== "es") return `<div class="prose"><h1>Legal notice</h1>
+    <p><b>Who runs this site.</b> Next Gen España is a non-profit citizen project for the transparency of NextGenerationEU spending in Spain. It has no commercial activity, no advertising and no relationship with any political party or public administration. Contact: through the <a href="#/correcciones">corrections channel</a> or the <a href="${repo}/issues" target="_blank" rel="noopener">project repository</a>.</p>
+    <p><b>Data sources.</b> All figures come from official open data, reused under its conditions (citing the source and update date, without distorting its meaning): Spain's National Grants Database (BDNS/SNPSAP), the Public Sector Procurement Platform (including aggregated regional platforms and in-house commissions) and the European Commission's Recovery and Resilience Scoreboard. Each record links to its original source. The date of the last update is shown at the bottom of every page.</p>
+    <p><b>Nature of the information.</b> Indicators, rankings, "no published destination" and "no trace" are automatic calculations on public data, with a public methodology. They are not accusations and do not prove any wrongdoing. Data may contain errors from the sources or from our processing: please report them and we will publish the correction.</p>
+    <p><b>Personal data.</b> No personal data of private individuals is published: grants and contracts awarded to natural persons are shown only as "natural person (protected data)", without name or ID. This site uses no cookies, analytics or tracking, collects no visitor data and loads no third-party resources. It is hosted on GitHub Pages (GitHub, Inc.), which processes technical connection data to serve the site. To exercise any right regarding data shown here, use the corrections channel.</p>
+    <p><b>Licence.</b> The code is open source (MIT licence). Data belong to their official sources and keep their reuse conditions.</p></div>`;
+  return `<div class="prose"><h1>Aviso legal</h1>
+    <p><b>Quién está detrás.</b> Next Gen España es un proyecto ciudadano sin ánimo de lucro para la transparencia del gasto de los fondos Next Generation EU en España. No tiene actividad comercial ni publicidad, ni relación con ningún partido político ni administración pública. Contacto: a través del <a href="#/correcciones">canal de correcciones</a> o del <a href="${repo}/issues" target="_blank" rel="noopener">repositorio del proyecto</a>.</p>
+    <p><b>Fuentes de los datos.</b> Todas las cifras proceden de datos abiertos oficiales, reutilizados conforme a sus condiciones (citar la fuente y la fecha de actualización, sin desnaturalizar su sentido): el Sistema Nacional de Publicidad de Subvenciones y Ayudas Públicas (BDNS), la Plataforma de Contratación del Sector Público (incluidas las plataformas autonómicas agregadas y los encargos a medios propios) y el Recovery and Resilience Scoreboard de la Comisión Europea. Cada ficha enlaza a su fuente original. La fecha de la última actualización figura al pie de cada página.</p>
+    <p><b>Naturaleza de la información.</b> Los indicadores, el ranking, el «sin destino publicado» y el «sin rastro» son cálculos automáticos sobre datos públicos, con metodología pública. No son acusaciones ni prueban irregularidad alguna. Los datos pueden contener errores de las fuentes o de nuestro tratamiento: si encuentras alguno, avísanos y publicaremos la corrección.</p>
+    <p><b>Datos personales.</b> No se publican datos personales de particulares: las ayudas y contratos a personas físicas aparecen solo como «persona física (datos protegidos)», sin nombre ni DNI. Esta web no usa cookies, analítica ni seguimiento, no recoge datos de quien la visita y no carga recursos de terceros. Está alojada en GitHub Pages (GitHub, Inc.), que trata datos técnicos de conexión para servir la página. Para ejercer cualquier derecho sobre los datos que aparecen aquí, usa el canal de correcciones.</p>
+    <p><b>Licencia.</b> El código es abierto (licencia MIT). Los datos pertenecen a sus fuentes oficiales y conservan sus condiciones de reutilización.</p></div>`;
+}
+
 // ---------- Router ----------
 function route() {
   const [path, qs] = location.hash.replace(/^#/, "").split("?");
@@ -1276,6 +1312,11 @@ function route() {
     app.innerHTML = viewCadena(); bindCadena();
   }
   else if (view === "metodologia") app.innerHTML = viewMethod();
+  else if (view === "aviso-legal") app.innerHTML = viewAvisoLegal();
+  else if (view === "correcciones") {
+    app.innerHTML = `<p class="muted">${t("loading")}</p>`;
+    viewCorrecciones().then((h) => { if (app.dataset.view === "correcciones") app.innerHTML = h; });
+  }
   else if (view === "denunciar") app.innerHTML = viewReport();
   else app.innerHTML = viewHome();
   window.scrollTo(0, 0);

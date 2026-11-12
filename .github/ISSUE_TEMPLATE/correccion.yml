@@ -1,0 +1,42 @@
+name: Avisar de un error en los datos
+description: Si un dato de la web es incorrecto o se ha interpretado mal, avísanos para revisarlo y corregirlo públicamente.
+title: "[Corrección] "
+labels: ["correccion"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por ayudarnos a que los datos sean correctos. Revisamos todos los avisos y publicamos el resultado en la página de **Correcciones** de la web.
+        **No incluyas datos personales** (DNI, teléfono, dirección). Si representas a la entidad afectada, basta con indicarlo.
+  - type: input
+    id: ref
+    attributes:
+      label: Ficha o página afectada
+      description: Se rellena sola desde el enlace «¿Hay un error?» de cada ficha. Si no, pega la dirección de la página.
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: ¿Qué dato es incorrecto?
+    validations:
+      required: true
+  - type: textarea
+    id: correcto
+    attributes:
+      label: ¿Cuál es el dato correcto?
+    validations:
+      required: true
+  - type: textarea
+    id: fuente
+    attributes:
+      label: Fuente o documento que lo acredita (enlace a BOE, BDNS, Plataforma de Contratación, resolución…)
+  - type: dropdown
+    id: quien
+    attributes:
+      label: ¿Quién avisa?
+      options:
+        - Un ciudadano o periodista
+        - La entidad o administración afectada
+        - Prefiero no decirlo
+      default: 0

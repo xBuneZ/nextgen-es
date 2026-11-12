@@ -17,14 +17,14 @@ concurrency:
 
 jobs:
   build:
-    if: github.event_name != 'issues' || contains(github.event.issue.labels.*.name, 'transparencia')
+    if: github.event_name != 'issues' || contains(github.event.issue.labels.*.name, 'transparencia') || contains(github.event.issue.labels.*.name, 'correccion')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: mkdir -p site/data && python3 etl/solicitudes.py
+      - run: mkdir -p site/data && python3 etl/solicitudes.py && python3 etl/correcciones.py
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Publicar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: etl/publicar_datos.sh "Solicitudes de transparencia $(date -u +%F)" solicitudes.json
+        run: etl/publicar_datos.sh "Solicitudes y correcciones $(date -u +%F)" solicitudes.json correcciones.json

@@ -65,6 +65,12 @@ Sin credenciales el bot funciona en modo prueba: escribe en el resumen del workf
 3. En GitHub, ve a *Settings → Secrets and variables → Actions → New repository secret* y añade `BSKY_HANDLE`, `BSKY_APP_PASSWORD`, `MASTODON_INSTANCE` (URL completa) y `MASTODON_TOKEN`. Basta con una de las dos redes.
 4. Prueba desde *Actions → Bot de redes sociales → Run workflow* con «Modo prueba» marcado, y después sin marcar.
 
+## Correcciones y aviso legal
+
+- Cada ficha tiene un enlace «¿Hay un error?» que abre un aviso (plantilla «Avisar de un error en los datos», etiqueta `correccion`). Al resolverlo, márcalo con `corregido` o `no-procede` y ciérralo: la página **Correcciones** de la web lo muestra automáticamente (workflow `solicitudes.yml`).
+- El **aviso legal** de la web identifica el proyecto, las fuentes y sus condiciones de reutilización, y el tratamiento de datos personales. Antes de difundir la web o activar el bot, conviene que lo revise un abogado.
+- La web no carga recursos de terceros: la fuente tipográfica (Inter, licencia OFL) se sirve desde `site/fonts/`.
+
 ## Principios
 
 Esta web publica **datos oficiales y verificables** y deja que cada cual saque conclusiones. Para que sea creíble (y legalmente sólida):
