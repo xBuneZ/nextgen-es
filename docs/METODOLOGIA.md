@@ -132,3 +132,17 @@ Para cada administración o ente público que recibe subvenciones Next Gen (NIF 
 - **Sin destino publicado:** recibido − repartido − contratado.
 
 La diferencia no implica que el dinero haya desaparecido: puede ser personal propio, cofinanciación, gasto pendiente o gasto publicado sin la marca del Plan. Las comunidades autónomas reciben la mayor parte de sus fondos por transferencias que no constan como subvención, y las universidades y organismos de investigación ejecutan directamente, por eso no se incluyen en la vista por defecto.
+
+# Lo que España declara a Bruselas
+
+Fuente: [Recovery and Resilience Scoreboard](https://ec.europa.eu/economy_finance/recovery-and-resilience-scoreboard/disbursements.html) de la Comisión Europea. Las tablas solo se pueden exportar desde la propia web (motor Qlik), así que `etl/scoreboard.js` abre la página con un navegador automatizado (Playwright) y descarga:
+
+- **Pagos de la UE a cada país:** fecha, tipo (subvención o préstamo) e importe.
+- **Los 100 mayores perceptores finales de cada país**, tal como los declara el Estado (art. 25 bis del Reglamento (UE) 2021/241): nombre, NIF, medidas e importe.
+
+Para cada perceptor declarado por España se busca lo publicado en España:
+
+- **Recibido:** como beneficiario en la BDNS o como adjudicatario de contratos.
+- **Gastado:** en sus propias convocatorias y en contratos como órgano de contratación. Se cruza por NIF; para los ministerios, por todas sus unidades (cadena de órganos); para las comunidades autónomas, por sus departamentos; y en las plataformas autonómicas sin NIF, por el nombre del órgano, tolerando variantes de idioma (raíces de palabras y siglas).
+
+Con rastro = mínimo entre lo declarado y el máximo de recibido o gastado. Sin rastro = declarado − con rastro. Los medios propios ejecutan buena parte con personal propio, y algunos órganos no se pueden cruzar por nombre, así que la diferencia es algo que preguntar, no una prueba.

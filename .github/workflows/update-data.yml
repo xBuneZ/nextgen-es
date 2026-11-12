@@ -34,9 +34,19 @@ jobs:
           restore-keys: bdns-
       - name: Descargar datos de la BDNS
         run: python3 etl/fetch_bdns.py --workers 6 --refresh-days 365
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - name: Datos de la Comisión Europea (Recovery and Resilience Scoreboard)
+        continue-on-error: true   # si falla, se mantienen los datos anteriores
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+          node etl/scoreboard.js
+      - run: pip install openpyxl
       - name: Temas, tipos de organización y cadena del dinero
         run: python3 etl/derivados.py
       - name: Publicar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: etl/publicar_datos.sh "Subvenciones BDNS $(date -u +%F)" resumen.json convocatorias.json convocatorias beneficiarios.json benef_idx temas.json tipos.json cadena.json
+        run: etl/publicar_datos.sh "Subvenciones BDNS $(date -u +%F)" resumen.json convocatorias.json convocatorias beneficiarios.json benef_idx temas.json tipos.json cadena.json bruselas.json

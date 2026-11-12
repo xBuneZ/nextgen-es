@@ -139,7 +139,8 @@ function fillHome() {
     if (!ref || !li) return;
     li.innerHTML = `<b>${t("ref_title")}</b><span>${t("ref_alloc").replace("{a}", eurShort(ref.subvenciones_asignadas))}
       ${ref.subvenciones_perdidas ? `<strong class="lost">${t("ref_lost").replace("{p}", eurShort(ref.subvenciones_perdidas))}</strong>` : ""}
-      <a href="${esc(ref.url)}" target="_blank" rel="noopener">${t("ref_source")} ↗</a></span>`;
+      <a href="${esc(ref.url)}" target="_blank" rel="noopener">${t("ref_source")} ↗</a>
+      <a href="#/bruselas">${t("bru_home_link")} →</a></span>`;
     li.hidden = false;
   }).catch(() => {});
   fetch("data/contratos/totales.json").then((r) => (r.ok ? r.json() : null)).then((d) => {
@@ -1044,6 +1045,7 @@ function loadCadena() {
 function viewCadena() {
   const opt = (v, l) => `<option value="${v}" ${cadState.tipo === v ? "selected" : ""}>${esc(l)}</option>`;
   return `<div class="hero"><h1>${t("cad_title")}</h1><p class="lead">${esc(t("cad_lead"))}</p></div>
+  ${cadTabs("cadena")}
   <div class="notice">${t("cad_caveat")}</div>
   <div class="filters">
     <input type="search" id="kq" placeholder="${esc(t("cad_search"))}" value="${esc(cadState.q)}">
@@ -1108,17 +1110,112 @@ async function showEntidad(nif) {
   // las filas de convocatorias abren su ficha
 }
 
+
+// ---------- Lo que España declara a Bruselas ----------
+const PAISES_ES = { Austria: "Austria", Belgium: "Bélgica", Bulgaria: "Bulgaria", Croatia: "Croacia", Cyprus: "Chipre", Czechia: "Chequia",
+  Denmark: "Dinamarca", Estonia: "Estonia", Finland: "Finlandia", France: "Francia", Germany: "Alemania", Greece: "Grecia", Hungary: "Hungría",
+  Ireland: "Irlanda", Italy: "Italia", Latvia: "Letonia", Lithuania: "Lituania", Luxembourg: "Luxemburgo", Malta: "Malta", Netherlands: "Países Bajos",
+  Poland: "Polonia", Portugal: "Portugal", Romania: "Rumanía", Slovakia: "Eslovaquia", Slovenia: "Eslovenia", Spain: "España", Sweden: "Suecia" };
+const paisNom = (p) => (lang === "es" ? PAISES_ES[p] || p : p);
+const pagoNom = (s) => (lang === "es" ? String(s).replace(/(\d+)(st|nd|rd|th) Payment/, "$1.º pago").replace("Pre-Financing", "Prefinanciación").replace(/\(Part (\d+)\)/, "($1.ª parte)") : s);
+const BRU = { data: null, loading: null };
+const bruState = { sort: "declarado", dir: -1, solo: false, q: "" };
+function loadBruselas() {
+  if (!BRU.loading) BRU.loading = fetch("data/bruselas.json").then((r) => (r.ok ? r.json() : null)).catch(() => null).then((d) => {
+    if (d) { d.byNif = new Map(d.perceptores.map((e) => [e.nif, e])); d.perceptores.forEach((e) => { e.publicado = Math.max(e.recibido, e.repartido + e.contratado); e.pct = e.declarado ? e.sin_rastro / e.declarado : 0; e._s = norm(e.nombre + " " + e.nif); }); }
+    return (BRU.data = d);
+  });
+  return BRU.loading;
+}
+const cadTabs = (cur) => `<div class="tabs" role="tablist"><a role="tab" href="#/cadena" aria-selected="${cur === "cadena"}">${t("cad_tab_local")}</a><a role="tab" href="#/bruselas" aria-selected="${cur === "bruselas"}">${t("bru_tab")}</a></div>`;
+function viewBruselas() {
+  const d = BRU.data;
+  if (!d) return `${cadTabs("bruselas")}<p class="notice">${t("contracts_none")}</p>`;
+  const asign = d.asignado_subvenciones;
+  const fecha = (s) => new Date(s).toLocaleDateString(locale(), { year: "numeric", month: "short" });
+  const maxP = Math.max(...d.pagos.map((p) => p[3]), 1);
+  const top = d.paises.slice(0, 10), maxC = Math.max(...top.map((p) => p.subvenciones), 1);
+  return `<div class="hero"><h1>${t("bru_title")}</h1><p class="lead">${esc(t("bru_lead"))}</p></div>
+  ${cadTabs("bruselas")}
+  <div class="kpis">
+    <div class="kpi"><b>${eurShort(d.pagado_subvenciones)}</b><span>${t("bru_paid_grants")}${asign ? ` · ${pctf(d.pagado_subvenciones / asign)} ${t("of")} ${eurShort(asign)} ${t("bru_allocated")}` : ""}</span></div>
+    <div class="kpi"><b>${eurShort(d.pagado_prestamos)}</b><span>${t("bru_paid_loans")}</span></div>
+    <div class="kpi"><b>${eurShort(d.declarado_total)}</b><span>${t("bru_top100_decl")}</span></div>
+    <div class="kpi warn"><b>${pctf(d.con_rastro_total / d.declarado_total)}</b><span>${t("bru_trace_pct").replace("{s}", eurShort(d.declarado_total - d.con_rastro_total))}</span></div>
+  </div>
+  <div class="cols">
+    <div class="col">${card(t("bru_payments"), t("bru_payments_sub"), `<ul class="pay">${d.pagos.slice().reverse().map((p) => `<li class="${p[1] === "Loans" ? "loan" : ""}"><span class="pd">${fecha(p[0])}</span><span class="pl">${esc(pagoNom(p[2]))} · ${t(p[1] === "Loans" ? "bru_loan" : "bru_grant")}</span>
+      <span class="pb"><span style="width:${(100 * p[3]) / maxP}%"></span></span><b>${eurShort(p[3])}</b></li>`).join("")}</ul>`)}</div>
+    <div class="col">${card(t("bru_eu"), t("bru_eu_sub"), `<ul class="pay">${top.map((p) => `<li class="${p.pais === "Spain" ? "es" : ""}"><span class="pl">${esc(paisNom(p.pais))}</span>
+      <span class="pb"><span style="width:${(100 * p.subvenciones) / maxC}%"></span></span><b>${eurShort(p.subvenciones)}</b></li>`).join("")}</ul>`)}</div>
+  </div>
+  <h2 class="sect">${t("bru_top100")}</h2>
+  <div class="notice">${t("bru_caveat")}</div>
+  <div class="filters"><input type="search" id="uq" placeholder="${esc(t("rank_search"))}" value="${esc(bruState.q)}">
+    <label class="chk"><input type="checkbox" id="usolo" ${bruState.solo ? "checked" : ""}> ${t("bru_only_gap")}</label></div>
+  <div id="uresults"></div>
+  <p class="disclaimer">${t("bru_source")} <a href="${esc(d.fuente)}" target="_blank" rel="noopener">Recovery and Resilience Scoreboard ↗</a></p>`;
+}
+function renderBruselas() {
+  const q = norm(bruState.q);
+  const rows = BRU.data.perceptores.filter((e) => (!bruState.solo || e.sin_rastro > 0) && (!q || e._s.includes(q)));
+  const k = bruState.sort, d = bruState.dir;
+  rows.sort((a, b) => (a[k] > b[k] ? d : a[k] < b[k] ? -d : 0));
+  const th = (key, l, cls = "num") => `<th class="${cls}" data-sort="${key}">${esc(l)}${bruState.sort === key ? (bruState.dir < 0 ? " ↓" : " ↑") : ""}</th>`;
+  $("#uresults").innerHTML = `<div class="table-wrap"><table><thead><tr>${th("nombre", t("bru_recipient"), "")}${th("declarado", t("bru_declared"))}${th("publicado", t("bru_published"), "num hide-sm")}${th("sin_rastro", t("cad_no_trace"))}</tr></thead>
+  <tbody>${rows.map((e) => `<tr data-bnif="${esc(e.nif)}"><td class="t-title">${esc(e.nombre)}<div class="t-sub">${esc(e.nif)}${e.n_contratos ? ` · ${num(e.n_contratos)} ${t("b_n_contracts")}` : ""}</div></td>
+    <td class="num">${eurShort(e.declarado)}</td><td class="num hide-sm">${eurShort(e.publicado)}</td>
+    <td class="num">${e.sin_rastro ? `<b>${eurShort(e.sin_rastro)}</b><span class="sub">${pctf(e.pct)}</span>` : "—"}</td></tr>`).join("")}</tbody></table></div>`;
+}
+function bindBruselas() {
+  if (!BRU.data) return;
+  $("#uq").addEventListener("input", (e) => { bruState.q = e.target.value; renderBruselas(); });
+  $("#usolo").addEventListener("change", (e) => { bruState.solo = e.target.checked; renderBruselas(); });
+  $("#uresults").addEventListener("click", (e) => {
+    const s = e.target.closest("th[data-sort]");
+    if (s) { const key = s.dataset.sort; bruState.dir = bruState.sort === key ? -bruState.dir : -1; bruState.sort = key; renderBruselas(); return; }
+    const tr = e.target.closest("tr[data-bnif]");
+    if (tr) location.hash = `#/perceptor/${encodeURIComponent(tr.dataset.bnif)}`;
+  });
+  renderBruselas();
+}
+async function showPerceptor(nif) {
+  openModal(`<p class="muted">${t("loading")}</p>`);
+  const d = await loadBruselas();
+  const e = d && d.byNif.get(decodeURIComponent(nif));
+  if (!e) return openModal(`<p class="muted">${t("none")}</p>`);
+  const txt = `Al amparo de la Ley 19/2013, de 9 de diciembre, de transparencia, acceso a la información pública y buen gobierno, solicito a ${prettyOrg(e.nombre)} (NIF ${e.nif}) información sobre el destino de los ${eur(e.declarado)} que el Gobierno de España ha declarado a la Comisión Europea como recibidos por esta entidad con cargo al Mecanismo de Recuperación y Resiliencia (lista de los 100 mayores perceptores finales, art. 25 bis del Reglamento (UE) 2021/241), en las medidas:\n\n${e.medidas.map((m) => "- " + m).join("\n")}\n\nEn concreto, solicito:\n\n1. Relación de contratos, encargos a medios propios, convenios, subvenciones y gastos de personal financiados con dichos fondos, con sus perceptores e importes.\n2. Importe ejecutado y pagado a fecha de hoy.\n3. Motivo por el que dichos gastos no constan, o constan solo en parte, en la Plataforma de Contratación del Sector Público o en la Base de Datos Nacional de Subvenciones con la marca del Plan de Recuperación.\n\nSolicito que la información se facilite por medios electrónicos.`;
+  openModal(`<h3>${esc(e.nombre)}</h3><p class="muted">${esc(e.nif)}</p>
+    <div class="kpis">
+      <div class="kpi"><b>${eurShort(e.declarado)}</b><span>${t("bru_declared_long")}</span></div>
+      <div class="kpi"><b>${eurShort(e.recibido)}</b><span>${t("bru_received_pub")}</span></div>
+      <div class="kpi"><b>${eurShort(e.repartido + e.contratado)}</b><span>${t("bru_spent_pub")}</span></div>
+      <div class="kpi warn"><b>${eurShort(e.sin_rastro)}</b><span>${t("cad_no_trace")}</span></div>
+    </div>
+    <h2>${t("bru_measures")}</h2><ul class="prose-list">${e.medidas.map((m) => `<li>${esc(m)}</li>`).join("")}</ul>
+    <h2>${t("bru_main_contracts")}</h2>${e.contratos.length ? `<div class="table-wrap"><table><tbody>${e.contratos.map(([cid, imp, adj]) => `<tr data-cid="${encodeURIComponent(cid)}"><td>${esc(adj || "—")}</td><td class="num">${eur(imp)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">${t("cad_none_pub")}</p>`}
+    <section class="explain"><h2>${t("sol_title")}</h2><details><summary class="btn">${t("sol_btn")}</summary>
+      <ol class="steps"><li>${t("sol_step1")}<textarea class="req" readonly rows="12">${esc(txt)}</textarea><button type="button" class="btn-sm copy">${t("sol_copy")}</button></li>
+      <li>${t("sol_step2")} ${/^[SQ]28/.test(e.nif) || /^MINISTERIO/.test(e.nombre.toUpperCase()) ? `<a href="https://transparencia.gob.es" target="_blank" rel="noopener">${t("sol_where_age")} ↗</a>` : `<a href="https://duckduckgo.com/?q=${encodeURIComponent("portal transparencia solicitud acceso información " + prettyOrg(e.nombre))}" target="_blank" rel="noopener">${t("sol_where_other").replace("{o}", esc(prettyOrg(e.nombre)))} ↗</a>`}<span class="sub">${t("sol_deadline")}</span></li></ol></details></section>
+    ${shareBlock(t("share_bru").replace("{o}", prettyOrg(e.nombre)).replace("{d}", eurShort(e.declarado)).replace("{s}", eurShort(e.sin_rastro)) + " " + t("share_tail"), "#/perceptor/" + encodeURIComponent(e.nif))}`);
+}
+
 // ---------- Router ----------
 function route() {
   const [path, qs] = location.hash.replace(/^#/, "").split("?");
   const parts = (path || "/").split("/").filter(Boolean);
   const app = $("#app");
   const view = parts[0] || "";
-  document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("active", a.getAttribute("href") === "#/" + view || (a.getAttribute("href") === "#/" && !view)));
+  const navView = view === "bruselas" ? "cadena" : view;
+  document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("active", a.getAttribute("href") === "#/" + navView || (a.getAttribute("href") === "#/" && !navView)));
 
   if (view === "contrato") {
     if (!app.dataset.view) { app.innerHTML = viewHome(); app.dataset.view = "home"; }
     return loadContratos().then(() => showContrato(parts[1]));
+  }
+  if (view === "perceptor") {
+    if (!app.dataset.view) { app.innerHTML = viewHome(); app.dataset.view = "home"; }
+    return showPerceptor(parts[1]);
   }
   if (view === "entidad") {
     if (!app.dataset.view) { app.innerHTML = viewHome(); app.dataset.view = "home"; }
@@ -1158,6 +1255,10 @@ function route() {
     runSearch(q);
   }
   else if (view === "temas") app.innerHTML = viewTemas();
+  else if (view === "bruselas") {
+    app.innerHTML = `<p class="muted">${t("loading")}</p>`;
+    loadBruselas().then(() => { if (app.dataset.view === "bruselas") { app.innerHTML = viewBruselas(); bindBruselas(); } });
+  }
   else if (view === "cadena") {
     const p = new URLSearchParams(qs || "");
     cadState.q = p.get("q") || ""; cadState.tipo = p.get("tipo") === "todas" ? "" : p.get("tipo") || "locales";
@@ -1173,10 +1274,10 @@ $("#modal .close").addEventListener("click", () => $("#modal").close());
 $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") $("#modal").close(); });
 let inApp = false;
 $("#modal").addEventListener("close", () => {
-  const m = location.hash.match(/^#\/(proyecto|beneficiario|contrato|entidad)\//);
+  const m = location.hash.match(/^#\/(proyecto|beneficiario|contrato|entidad|perceptor)\//);
   if (!m) return;
   if (inApp) history.back();
-  else location.hash = m[1] === "contrato" ? "#/contratos" : m[1] === "beneficiario" ? "#/beneficiarios" : m[1] === "entidad" ? "#/cadena" : "#/proyectos";
+  else location.hash = m[1] === "contrato" ? "#/contratos" : m[1] === "beneficiario" ? "#/beneficiarios" : m[1] === "entidad" ? "#/cadena" : m[1] === "perceptor" ? "#/bruselas" : "#/proyectos";
 });
 $("#modal-body").addEventListener("click", (e) => {
   const cl = e.target.closest("button.copylink");

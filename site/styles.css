@@ -300,3 +300,17 @@ tr.sel td { background: var(--c3-soft); font-weight: 600; }
   nav a { padding: 8px 10px; }
   .hsearch { flex: 0 1 200px; min-width: 140px; }
 }
+
+/* Bruselas */
+.pay { list-style: none; padding: 0; margin: 14px 0 0; display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+.pay li { display: grid; grid-template-columns: 70px minmax(0, 1fr) 90px; grid-template-areas: "pd pl b" "pb pb pb"; gap: 2px 10px; align-items: center; }
+.pay .pd { grid-area: pd; color: var(--muted); }
+.pay .pl { grid-area: pl; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pay b { grid-area: b; text-align: right; }
+.pay .pb { grid-area: pb; height: 6px; border-radius: 3px; background: var(--soft); }
+.pay .pb span { display: block; height: 6px; border-radius: 3px; background: var(--c1); }
+.pay li.loan .pb span { background: var(--c2); }
+.pay li.es .pb span { background: var(--c3); }
+.pay li.es .pl { font-weight: 700; }
+.pay li:not(:has(.pd)) { grid-template-columns: minmax(0, 1fr) 90px; grid-template-areas: "pl b" "pb pb"; }
+.prose-list { font-size: 13px; padding-left: 18px; }

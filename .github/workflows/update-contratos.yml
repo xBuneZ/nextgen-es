@@ -40,7 +40,7 @@ jobs:
       - name: Procesar contratos PRTR (Plataforma de Contratación y plataformas autonómicas)
         run: python3 etl/fetch_contratos.py ${{ inputs.periods && format('--periods {0}', inputs.periods) || '' }}
       - name: Temas, tipos de organización y cadena del dinero
-        run: python3 etl/derivados.py
+        run: pip install openpyxl && python3 etl/derivados.py
       - name: Publicar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

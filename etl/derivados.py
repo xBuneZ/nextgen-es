@@ -243,12 +243,141 @@ def cadena(convs: list[dict]) -> dict:
             "nota": "Recibido = subvenciones Next Gen publicadas en la BDNS con la entidad como beneficiaria. Repartido = sus propias convocatorias marcadas como MRR. Contratado = contratos marcados como Plan de Recuperación con su NIF como órgano de contratación. La diferencia puede deberse a gasto en personal propio, cofinanciación, plazos o a gasto publicado sin la marca Next Gen."}
 
 
+# ---------- Lo que España declara a Bruselas (Recovery and Resilience Scoreboard) ----------
+RRF = ROOT / "etl" / ".cache" / "rrf"
+FUENTE_RRF = "https://ec.europa.eu/economy_finance/recovery-and-resilience-scoreboard/disbursements.html"
+
+
+def leer_xlsx(f: Path) -> list[tuple]:
+    import openpyxl
+    return list(openpyxl.load_workbook(f, read_only=True).active.iter_rows(values_only=True))
+
+
+def bruselas(convs: list[dict]) -> dict | None:
+    if not (RRF / "perceptores.xlsx").exists() or not (RRF / "pagos.xlsx").exists():
+        return None
+    # Pagos de la UE (todos los países, para comparar)
+    pagos = [r for r in leer_xlsx(RRF / "pagos.xlsx")[1:] if r and r[0]]
+    esp = sorted(([str(r[1])[:10], r[2], r[3], round(float(r[4] or 0))] for r in pagos if r[0] == "Spain"), key=lambda x: x[0])
+    por_pais = defaultdict(lambda: {"subvenciones": 0, "prestamos": 0})
+    for r in pagos:
+        por_pais[r[0]]["subvenciones" if r[2] == "Grants" else "prestamos"] += float(r[4] or 0)
+    paises = sorted(({"pais": k, "subvenciones": round(v["subvenciones"]), "prestamos": round(v["prestamos"])} for k, v in por_pais.items()),
+                    key=lambda x: -x["subvenciones"])
+
+    # Lo publicado en España para cada perceptor
+    sub = {}
+    for f in glob.glob(str(D / "benef_idx" / "n_*.json")):
+        for r in json.loads(Path(f).read_text()):
+            sub.setdefault(r[0].upper(), r[2])
+    emp = D / "contratos" / "empresas.json"
+    ganado = {e[0].upper(): e[3] for e in (json.loads(emp.read_text()) if emp.exists() else []) if e[0]}
+    contratos = [c for f in glob.glob(str(D / "contratos" / "det" / "*.json")) for c in json.loads(Path(f).read_text()).values() if c.get("importe")]
+    # Las plataformas autonómicas no publican el NIF del órgano: se cruza por nombre, tolerando
+    # variantes de idioma y escritura (Infraestructuras/Infraestructures, Cataluña/Catalunya…):
+    # se comparan las raíces (5 primeras letras) de las palabras significativas, y las siglas.
+    VAC = {"de", "del", "la", "las", "los", "el", "els", "les", "i", "y", "a", "e", "do", "da", "para", "per", "sa", "sau", "sl", "slu",
+           "sme", "mp", "s", "m", "p", "u", "l", "d", "ente", "publico", "sociedad", "anonima", "societat", "empresa"}
+    def raices(x):
+        return frozenset(w[:5] for w in re.split(r"[^a-z0-9]+", norm(x)) if w and w not in VAC and len(w) > 1)
+    def siglas(x):
+        m = re.search(r"\(([A-Z0-9]{3,})\)", x or "")
+        return m.group(1) if m else None
+    por_nif, por_raiz, por_sigla = defaultdict(list), defaultdict(list), defaultdict(list)
+    for c in contratos:
+        if c.get("organo_nif"):
+            por_nif[c["organo_nif"].upper()].append(c)
+        else:
+            por_raiz[raices(c.get("organo", ""))].append(c)
+            if siglas(c.get("organo")):
+                por_sigla[siglas(c["organo"])].append(c)
+
+    def por_nombre(nombre):
+        r = raices(nombre)
+        out = []
+        if len(r) >= 2:
+            for k, cs in por_raiz.items():
+                if k and len(r & k) / len(r | k) >= 0.75:
+                    out += cs
+        if siglas(nombre):
+            out += por_sigla.get(siglas(nombre), [])
+        return out
+
+    def contratos_de(nif: str, nombre: str) -> list:
+        sel = {c["cid"]: c for c in por_nif.get(nif, [])}
+        sel.update({c["cid"]: c for c in por_nombre(nombre)})
+        n = norm(nombre)
+        m = re.match(r"ministerio (?:de |del |para la |para el )?(?:la |el |los |las )?([a-z]+)", n)
+        if m and nif[:1] == "S":  # todas las unidades del ministerio, aunque tengan NIF propio
+            clave = m.group(1)
+            for c in contratos:
+                r0 = norm((c.get("ruta") or "").split(" › ")[0])
+                if c.get("ambito") == "ADMINISTRACIÓN GENERAL DEL ESTADO" and r0.startswith("ministerio") and clave in r0:
+                    sel[c["cid"]] = c
+        k = ccaa_de(nombre) if nif[:1] == "S" else None
+        if k:  # departamentos de la comunidad, sin las entidades locales
+            for c in contratos:
+                ruta = norm(c.get("ruta") or "")
+                r0 = ruta.split(" › ")[0]
+                if c.get("ambito") in ("COMUNIDADES Y CIUDADES AUTÓNOMAS", "PLATAFORMAS AUTONÓMICAS PROPIAS") \
+                        and any(a in r0 for a in CCAA[k]) and not re.search(r"administracio local|entidades locales|ayuntamiento|ajuntament|concello|diputaci", ruta):
+                    sel[c["cid"]] = c
+        return list(sel.values())
+
+    propias_ccaa = defaultdict(float)
+    propias_min = defaultdict(float)
+    for c in convs:
+        if c["nivel1"] == "AUTONOMICA":
+            k = next((k for k, al in CCAA.items() if any(a in norm(c["nivel2"]) for a in al)), None)
+            if k:
+                propias_ccaa[k] += c["importe"]
+        elif c["nivel1"] == "ESTADO":
+            propias_min[norm(c["nivel2"])] += c["importe"]
+
+    out = []
+    for r in leer_xlsx(RRF / "perceptores.xlsx")[1:]:
+        if not r or r[0] != "Spain":
+            continue
+        nif = (r[2] or "").strip().upper()
+        nombre = (r[1] or "").strip()
+        declarado = float(r[4] or 0)
+        cs = contratos_de(nif, nombre)
+        contratado = sum(c["importe"] for c in cs)
+        recibido = sub.get(nif, 0) + ganado.get(nif, 0)
+        k = ccaa_de(nombre) if nif[:1] == "S" else None
+        m = re.match(r"ministerio (?:de |del |para la |para el )?(?:la |el |los |las )?([a-z]+)", norm(nombre))
+        repartido = propias_ccaa.get(k, 0) if k else (sum(v for kk, v in propias_min.items() if m and m.group(1) in kk) if m and nif[:1] == "S" else 0)
+        publicado = max(recibido, repartido + contratado)
+        rastro = min(declarado, publicado)
+        medidas = [x.strip(" •\n") for x in str(r[3] or "").split("\n") if x.strip(" •\n")]
+        out.append({"nif": nif, "nombre": nombre, "declarado": round(declarado), "medidas": medidas[:12],
+                    "recibido": round(recibido), "repartido": round(repartido), "contratado": round(contratado), "n_contratos": len(cs),
+                    "contratos": [[c["cid"], round(c["importe"]), (c.get("adj") or [{}])[0].get("nombre", "")] for c in sorted(cs, key=lambda c: -c["importe"])[:10]],
+                    "con_rastro": round(rastro), "sin_rastro": round(declarado - rastro)})
+    out.sort(key=lambda e: -e["declarado"])
+    ref = json.loads((ROOT / "site" / "referencia.json").read_text()) if (ROOT / "site" / "referencia.json").exists() else {}
+    return {
+        "fuente": FUENTE_RRF,
+        "pagos": esp,
+        "pagado_subvenciones": round(sum(p[3] for p in esp if p[1] == "Grants")),
+        "pagado_prestamos": round(sum(p[3] for p in esp if p[1] == "Loans")),
+        "asignado_subvenciones": ref.get("subvenciones_asignadas"),
+        "paises": paises,
+        "perceptores": out,
+        "declarado_total": round(sum(e["declarado"] for e in out)),
+        "con_rastro_total": round(sum(e["con_rastro"] for e in out)),
+    }
+
+
 def main():
     convs = json.loads((D / "convocatorias.json").read_text())
     dump("temas.json", temas(convs))
     dump("tipos.json", tipos())
     dump("cadena.json", cadena(convs))
-    print("Derivados: temas.json, tipos.json, cadena.json")
+    b = bruselas(convs)
+    if b:
+        dump("bruselas.json", b)
+    print("Derivados: temas.json, tipos.json, cadena.json" + (", bruselas.json" if b else " (sin datos del Scoreboard)"))
 
 
 if __name__ == "__main__":
